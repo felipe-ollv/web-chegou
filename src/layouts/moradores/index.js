@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { lighten, useTheme } from "@mui/material/styles";
 
 import Card from "@mui/material/Card";
 import Divider from "@mui/material/Divider";
@@ -13,7 +14,7 @@ import Chip from "@mui/material/Chip";
 
 import MDBox from "components/MDBox";
 import MDTypography from "components/MDTypography";
-import MDButton from "components/MDButton";
+// import MDButton from "components/MDButton";
 
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
@@ -63,6 +64,7 @@ const statusColor = {
 };
 
 function Moradores() {
+  const theme = useTheme();
   const [moradores, setMoradores] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -95,9 +97,6 @@ function Moradores() {
                     Lista básica com dados mock. Substitua pelo retorno da API.
                   </MDTypography>
                 </div>
-                <MDButton variant="gradient" color="info">
-                  Novo morador
-                </MDButton>
               </MDBox>
               <Divider />
               <TableContainer>
@@ -124,8 +123,16 @@ function Moradores() {
                           <TableCell>
                             <Chip
                               label={morador.status}
-                              color={statusColor[morador.status] || "default"}
                               size="small"
+                              sx={{
+                                bgcolor: lighten(
+                                  theme.palette[statusColor[morador.status]]?.main ||
+                                    theme.palette.grey[600],
+                                  0.15
+                                ),
+                                color: theme.palette.common.white,
+                                fontWeight: 600,
+                              }}
                             />
                           </TableCell>
                         </TableRow>

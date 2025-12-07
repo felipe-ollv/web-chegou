@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
+import { lighten, useTheme } from "@mui/material/styles";
+
 import Card from "@mui/material/Card";
 import Chip from "@mui/material/Chip";
 import Divider from "@mui/material/Divider";
@@ -39,7 +41,7 @@ const mockFetchRecebimentos = () =>
             item: "Pacote pequeno (Shopee)",
             recebidoPor: "Camila - Portaria 1",
             recebidoEm: "12/05 09:10",
-            status: "Disponível",
+            status: "Pendente",
           },
           {
             id: "rec-02",
@@ -69,7 +71,7 @@ const mockFetchRecebimentos = () =>
             item: "Correspondência interna",
             recebidoPor: "Ricardo - Portaria 3",
             recebidoEm: "12/05 10:05",
-            status: "Disponível",
+            status: "Pendente",
           },
           {
             id: "rec-05",
@@ -86,21 +88,18 @@ const mockFetchRecebimentos = () =>
     )
   );
 
-const statusColor = {
-  Disponível: "info",
-  Pendente: "warning",
-  Retirado: "success",
-};
-
 function ResumoCard({ label, value, helper, color }) {
   return (
     <Card
-      sx={({ palette: { gradients, white }, functions: { linearGradient } }) => ({
-        background: gradients[color]
-          ? linearGradient(gradients[color].main, gradients[color].state)
-          : linearGradient(gradients.info.main, gradients.info.state),
-        color: white.main,
-      })}
+      sx={({ palette, functions: { linearGradient } }) => {
+        const base = palette[color]?.main || palette.info.main;
+        const to = lighten(base, 0.15);
+        const from = lighten(base, 0.3);
+        return {
+          background: linearGradient(from, to),
+          color: palette.common.white,
+        };
+      }}
     >
       <MDBox p={2.5}>
         <MDTypography variant="h6" fontWeight="medium" color="inherit">
@@ -110,7 +109,7 @@ function ResumoCard({ label, value, helper, color }) {
           {value}
         </MDTypography>
         {helper && (
-          <MDTypography variant="button" color="inherit">
+          <MDTypography variant="button" color="inherit" opacity={0.9}>
             {helper}
           </MDTypography>
         )}
@@ -131,6 +130,7 @@ ResumoCard.propTypes = {
 };
 
 function Recebimentos() {
+  const theme = useTheme();
   const [recebimentos, setRecebimentos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("todos");
@@ -154,11 +154,10 @@ function Recebimentos() {
       recebimentos.reduce(
         (acc, item) => {
           if (item.status === "Pendente") acc.pendentes += 1;
-          if (item.status === "Disponível") acc.disponiveis += 1;
           if (item.status === "Retirado") acc.retirados += 1;
           return acc;
         },
-        { pendentes: 0, disponiveis: 0, retirados: 0 }
+        { pendentes: 0, retirados: 0 }
       ),
     [recebimentos]
   );
@@ -217,7 +216,7 @@ function Recebimentos() {
       <DashboardNavbar />
       <MDBox py={3}>
         <Grid container spacing={3}>
-          <Grid item xs={12} md={4}>
+          <Grid item xs={12} md={6}>
             <ResumoCard
               label="Pendentes"
               value={totals.pendentes}
@@ -225,15 +224,7 @@ function Recebimentos() {
               color="warning"
             />
           </Grid>
-          <Grid item xs={12} md={4}>
-            <ResumoCard
-              label="Disponíveis"
-              value={totals.disponiveis}
-              helper="Liberados para retirada"
-              color="info"
-            />
-          </Grid>
-          <Grid item xs={12} md={4}>
+          <Grid item xs={12} md={6}>
             <ResumoCard
               label="Retirados"
               value={totals.retirados}
@@ -262,7 +253,10 @@ function Recebimentos() {
               </MDBox>
               <Divider />
               <MDBox px={3} pb={1} display="flex" flexWrap="wrap" gap={2}>
-                <FormControl size="small" sx={{ minWidth: 180 }}>
+                <FormControl
+                  size="small"
+                  sx={{ minWidth: 180, ".MuiOutlinedInput-root": { minHeight: 48 } }}
+                >
                   <InputLabel id="status-filter-label">Status</InputLabel>
                   <Select
                     labelId="status-filter-label"
@@ -272,11 +266,13 @@ function Recebimentos() {
                   >
                     <MenuItem value="todos">Todos</MenuItem>
                     <MenuItem value="Pendente">Pendente</MenuItem>
-                    <MenuItem value="Disponível">Disponível</MenuItem>
                     <MenuItem value="Retirado">Retirado</MenuItem>
                   </Select>
                 </FormControl>
-                <FormControl size="small" sx={{ minWidth: 200 }}>
+                <FormControl
+                  size="small"
+                  sx={{ minWidth: 200, ".MuiOutlinedInput-root": { minHeight: 48 } }}
+                >
                   <InputLabel id="bloco-filter-label">Bloco</InputLabel>
                   <Select
                     labelId="bloco-filter-label"
@@ -297,7 +293,6 @@ function Recebimentos() {
                 <Table>
                   <TableHead>
                     <TableRow>
-                      <TableCell>Item</TableCell>
                       <TableCell>Morador</TableCell>
                       <TableCell>Unidade</TableCell>
                       <TableCell>Recebido por</TableCell>
@@ -310,22 +305,24 @@ function Recebimentos() {
                     {!loading &&
                       filteredRecebimentos.map((item) => (
                         <TableRow key={item.id}>
-                          <TableCell>
-                            <MDTypography variant="button" fontWeight="medium">
-                              {item.item}
-                            </MDTypography>
-                          </TableCell>
                           <TableCell>{item.morador}</TableCell>
                           <TableCell>{item.unidade}</TableCell>
-                          <TableCell>{item.recebidoPor}</TableCell>
-                          <TableCell>{item.recebidoEm}</TableCell>
-                          <TableCell>
-                            <Chip
-                              label={item.status}
-                              color={statusColor[item.status] || "default"}
-                              size="small"
-                            />
-                          </TableCell>
+                      <TableCell>{item.recebidoPor}</TableCell>
+                      <TableCell>{item.recebidoEm}</TableCell>
+                      <TableCell>
+                        <Chip
+                          label={item.status}
+                          size="small"
+                          sx={{
+                            bgcolor:
+                              item.status === "Pendente"
+                                ? lighten(theme.palette.warning.main, 0.15)
+                                : lighten(theme.palette.success.main, 0.15),
+                            color: theme.palette.common.white,
+                            fontWeight: 600,
+                          }}
+                        />
+                      </TableCell>
                           <TableCell align="right">
                             {item.status !== "Retirado" ? (
                               <MDButton
@@ -346,7 +343,7 @@ function Recebimentos() {
                       ))}
                     {loading && (
                       <TableRow>
-                        <TableCell colSpan={7}>
+                        <TableCell colSpan={6}>
                           <MDBox py={2}>
                             <MDTypography variant="button" color="text">
                               Carregando...
@@ -357,7 +354,7 @@ function Recebimentos() {
                     )}
                     {!loading && filteredRecebimentos.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={7}>
+                        <TableCell colSpan={6}>
                           <MDBox py={2}>
                             <MDTypography variant="button" color="text">
                               Nenhum recebimento encontrado para os filtros selecionados.
