@@ -126,6 +126,19 @@ function Avisos() {
     handleModalClose();
   };
 
+  const handleToggleStatus = (id) => {
+    setAvisos((prev) =>
+      prev.map((aviso) =>
+        aviso.id === id
+          ? {
+              ...aviso,
+              status: aviso.status === "Ativo" ? "Finalizado" : "Ativo",
+            }
+          : aviso
+      )
+    );
+  };
+
   return (
     <DashboardLayout>
       <DashboardNavbar />
@@ -201,17 +214,27 @@ function Avisos() {
                             />
                           </TableCell>
                           <TableCell>
-                            <MDButton
-                              component="a"
-                              href={aviso.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              variant="text"
-                              color="info"
-                              startIcon={<Icon>file_download</Icon>}
-                            >
-                              Abrir
-                            </MDButton>
+                            <MDBox display="flex" alignItems="center" gap={1}>
+                              <MDButton
+                                variant="text"
+                                color={aviso.status === "Ativo" ? "warning" : "success"}
+                                startIcon={<Icon>toggle_on</Icon>}
+                                onClick={() => handleToggleStatus(aviso.id)}
+                              >
+                                {aviso.status === "Ativo" ? "Desativar" : "Ativar"}
+                              </MDButton>
+                              <MDButton
+                                component="a"
+                                href={aviso.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                variant="text"
+                                color="info"
+                                startIcon={<Icon>file_download</Icon>}
+                              >
+                                Abrir
+                              </MDButton>
+                            </MDBox>
                           </TableCell>
                         </TableRow>
                       ))}

@@ -17,6 +17,7 @@ import TableCell from "@mui/material/TableCell";
 import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
+import TextField from "@mui/material/TextField";
 
 import PropTypes from "prop-types";
 
@@ -40,7 +41,7 @@ const mockFetchRecebimentos = () =>
             bloco: "Bloco A",
             item: "Pacote pequeno (Shopee)",
             recebidoPor: "Camila - Portaria 1",
-            recebidoEm: "12/05 09:10",
+            recebidoEm: "2024-05-12T09:10:00",
             status: "Pendente",
           },
           {
@@ -50,7 +51,7 @@ const mockFetchRecebimentos = () =>
             bloco: "Bloco B",
             item: "Envelope (cartório)",
             recebidoPor: "Carlos - Portaria 2",
-            recebidoEm: "12/05 08:35",
+            recebidoEm: "2024-05-12T08:35:00",
             status: "Pendente",
           },
           {
@@ -60,7 +61,7 @@ const mockFetchRecebimentos = () =>
             bloco: "Bloco A",
             item: "Pacote médio (Amazon)",
             recebidoPor: "Camila - Portaria 1",
-            recebidoEm: "11/05 18:10",
+            recebidoEm: "2024-05-11T18:10:00",
             status: "Retirado",
           },
           {
@@ -70,7 +71,7 @@ const mockFetchRecebimentos = () =>
             bloco: "Bloco C",
             item: "Correspondência interna",
             recebidoPor: "Ricardo - Portaria 3",
-            recebidoEm: "12/05 10:05",
+            recebidoEm: "2024-05-12T10:05:00",
             status: "Pendente",
           },
           {
@@ -80,13 +81,34 @@ const mockFetchRecebimentos = () =>
             bloco: "Bloco B",
             item: "Caixa refrigerada",
             recebidoPor: "Carlos - Portaria 2",
-            recebidoEm: "12/05 07:50",
+            recebidoEm: "2024-05-12T07:50:00",
             status: "Pendente",
           },
         ]),
       320
     )
   );
+
+const parseRecebidoEmDate = (value) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (!Number.isNaN(parsed.getTime())) return parsed;
+  // Fallback for legacy "dd/MM HH:mm" strings
+  const [datePart, timePart = "00:00"] = value.split(" ");
+  const [day, month] = datePart.split("/").map(Number);
+  const [hour, minute] = timePart.split(":").map(Number);
+  const now = new Date();
+  const legacy = new Date(now.getFullYear(), (month || 1) - 1, day || 1, hour || 0, minute || 0);
+  return Number.isNaN(legacy.getTime()) ? null : legacy;
+};
+
+const formatRecebidoEmLabel = (value) => {
+  const date = parseRecebidoEmDate(value);
+  if (!date) return value || "-";
+  const datePart = date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  const timePart = date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  return `${datePart} ${timePart}`;
+};
 
 function ResumoCard({ label, value, helper, color }) {
   return (
@@ -98,18 +120,24 @@ function ResumoCard({ label, value, helper, color }) {
         return {
           background: linearGradient(from, to),
           color: palette.common.white,
+          "& .resumo-card__text": { color: palette.common.white },
         };
       }}
     >
       <MDBox p={2.5}>
-        <MDTypography variant="h6" fontWeight="medium" color="inherit">
+        <MDTypography className="resumo-card__text" variant="h6" fontWeight="medium" color="inherit">
           {label}
         </MDTypography>
-        <MDTypography variant="h3" fontWeight="bold" color="inherit">
+        <MDTypography className="resumo-card__text" variant="h3" fontWeight="bold" color="inherit">
           {value}
         </MDTypography>
         {helper && (
-          <MDTypography variant="button" color="inherit" opacity={0.9}>
+          <MDTypography
+            className="resumo-card__text"
+            variant="button"
+            color="inherit"
+            opacity={0.9}
+          >
             {helper}
           </MDTypography>
         )}
@@ -135,6 +163,7 @@ function Recebimentos() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("todos");
   const [blocoFilter, setBlocoFilter] = useState("todos");
+  const [dataFiltro, setDataFiltro] = useState("");
 
   useEffect(() => {
     const fetchData = async () => {
@@ -167,19 +196,35 @@ function Recebimentos() {
     [recebimentos]
   );
 
-  const filteredRecebimentos = useMemo(
-    () =>
-      recebimentos.filter((item) => {
-        if (statusFilter !== "todos" && item.status !== statusFilter) {
+  const filteredRecebimentos = useMemo(() => {
+    const selectedDate = dataFiltro ? new Date(dataFiltro) : null;
+
+    if (selectedDate) selectedDate.setHours(0, 0, 0, 0);
+    const selectedEnd = selectedDate ? new Date(selectedDate.getTime()) : null;
+    if (selectedEnd) selectedEnd.setHours(23, 59, 59, 999);
+
+    return recebimentos.filter((item) => {
+      if (statusFilter !== "todos" && item.status !== statusFilter) {
+        return false;
+      }
+      if (blocoFilter !== "todos" && item.bloco !== blocoFilter) {
+        return false;
+      }
+
+      if (selectedDate) {
+        const recebimentoDate = parseRecebidoEmDate(item.recebidoEm);
+        if (
+          !recebimentoDate ||
+          recebimentoDate.getTime() < selectedDate.getTime() ||
+          recebimentoDate.getTime() > selectedEnd.getTime()
+        ) {
           return false;
         }
-        if (blocoFilter !== "todos" && item.bloco !== blocoFilter) {
-          return false;
-        }
-        return true;
-      }),
-    [recebimentos, statusFilter, blocoFilter]
-  );
+      }
+
+      return true;
+    });
+  }, [recebimentos, statusFilter, blocoFilter, dataFiltro]);
 
   const handleRegistrarRetirada = (id) => {
     setRecebimentos((prev) =>
@@ -195,6 +240,7 @@ function Recebimentos() {
   };
 
   const handleNovoRecebimento = () => {
+    const agora = new Date();
     const novo = {
       id: `rec-${Date.now()}`,
       morador: "Novo morador",
@@ -202,10 +248,7 @@ function Recebimentos() {
       bloco: "Bloco A",
       item: "Item adicionado via mock",
       recebidoPor: "Portaria",
-      recebidoEm: new Date().toLocaleTimeString("pt-BR", {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
+      recebidoEm: agora.toISOString(),
       status: "Pendente",
     };
     setRecebimentos((prev) => [novo, ...prev]);
@@ -255,7 +298,7 @@ function Recebimentos() {
               <MDBox px={3} pb={1} display="flex" flexWrap="wrap" gap={2}>
                 <FormControl
                   size="small"
-                  sx={{ minWidth: 180, ".MuiOutlinedInput-root": { minHeight: 48 } }}
+                  sx={{ minWidth: 180, ".MuiOutlinedInput-root": { minHeight: 44 } }}
                 >
                   <InputLabel id="status-filter-label">Status</InputLabel>
                   <Select
@@ -271,7 +314,7 @@ function Recebimentos() {
                 </FormControl>
                 <FormControl
                   size="small"
-                  sx={{ minWidth: 200, ".MuiOutlinedInput-root": { minHeight: 48 } }}
+                  sx={{ minWidth: 200, ".MuiOutlinedInput-root": { minHeight: 44 } }}
                 >
                   <InputLabel id="bloco-filter-label">Bloco</InputLabel>
                   <Select
@@ -288,6 +331,15 @@ function Recebimentos() {
                     ))}
                   </Select>
                 </FormControl>
+                <TextField
+                  size="small"
+                  type="date"
+                  label="Data Recebimento"
+                  value={dataFiltro}
+                  onChange={(event) => setDataFiltro(event.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  sx={{ minWidth: 180, ".MuiOutlinedInput-root": { minHeight: 44 } }}
+                />
               </MDBox>
               <TableContainer>
                 <Table>
@@ -307,22 +359,22 @@ function Recebimentos() {
                         <TableRow key={item.id}>
                           <TableCell>{item.morador}</TableCell>
                           <TableCell>{item.unidade}</TableCell>
-                      <TableCell>{item.recebidoPor}</TableCell>
-                      <TableCell>{item.recebidoEm}</TableCell>
-                      <TableCell>
-                        <Chip
-                          label={item.status}
-                          size="small"
-                          sx={{
-                            bgcolor:
-                              item.status === "Pendente"
-                                ? lighten(theme.palette.warning.main, 0.15)
-                                : lighten(theme.palette.success.main, 0.15),
-                            color: theme.palette.common.white,
-                            fontWeight: 600,
-                          }}
-                        />
-                      </TableCell>
+                          <TableCell>{item.recebidoPor}</TableCell>
+                          <TableCell>{formatRecebidoEmLabel(item.recebidoEm)}</TableCell>
+                          <TableCell>
+                            <Chip
+                              label={item.status}
+                              size="small"
+                              sx={{
+                                bgcolor:
+                                  item.status === "Pendente"
+                                    ? lighten(theme.palette.warning.main, 0.15)
+                                    : lighten(theme.palette.success.main, 0.15),
+                                color: theme.palette.common.white,
+                                fontWeight: 600,
+                              }}
+                            />
+                          </TableCell>
                           <TableCell align="right">
                             {item.status !== "Retirado" ? (
                               <MDButton
