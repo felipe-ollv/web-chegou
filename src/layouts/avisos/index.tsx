@@ -30,39 +30,8 @@ import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import Footer from "examples/Footer";
 
-const mockFetchAvisos = () =>
-  new Promise((resolve) =>
-    setTimeout(
-      () =>
-        resolve([
-          {
-            id: "aviso-01",
-            titulo: "Manutenção programada dos elevadores",
-            data: "2024-05-10",
-            tipo: "Comunicado",
-            status: "Ativo",
-            url: "#",
-          },
-          {
-            id: "aviso-02",
-            titulo: "Assembleia geral – 22/05",
-            data: "2024-05-02",
-            tipo: "Assembleia",
-            status: "Ativo",
-            url: "#",
-          },
-          {
-            id: "aviso-03",
-            titulo: "Relatório financeiro abril",
-            data: "2024-04-28",
-            tipo: "Financeiro",
-            status: "Finalizado",
-            url: "#",
-          },
-        ]),
-      300
-    )
-  );
+import { apiFetch } from "services/api";
+import { getAuthContext } from "services/auth";
 
 const tipoColor = {
   Comunicado: "info",
@@ -91,8 +60,29 @@ function Avisos() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const data = await mockFetchAvisos();
-        setAvisos(data);
+        const selected = localStorage.getItem("condominioSelecionado");
+        const parsed = selected ? JSON.parse(selected) : null;
+        const { condominiumUuid } = getAuthContext();
+        const uuidCondominium = parsed?.uuid_condominium || condominiumUuid;
+        if (!uuidCondominium) {
+          setAvisos([]);
+          return;
+        }
+        const data = await apiFetch(`/note-data/find-note-data/${uuidCondominium}`);
+        const normalized = (data || []).map((item) => {
+          const url = item.content || "#";
+          const fileName = String(url).split("/").pop() || "Documento";
+          return {
+            id: item.uuid_note_data || fileName,
+            titulo: fileName.replace(/[-_]/g, " "),
+            data: item.created_at ? String(item.created_at).slice(0, 10) : "-",
+            tipo: "Comunicado",
+            status: Number(item.read || 0) === 1 ? "Finalizado" : "Ativo",
+            url,
+            raw: item,
+          };
+        });
+        setAvisos(normalized);
       } finally {
         setLoading(false);
       }
@@ -110,33 +100,81 @@ function Avisos() {
     setFormAviso({ titulo: "", tipo: "Comunicado", arquivo: null });
   };
 
-  const handleSalvarAviso = () => {
-    if (!formAviso.titulo.trim()) return;
+  const handleSalvarAviso = async () => {
+    if (!formAviso.arquivo) return;
+    const selected = localStorage.getItem("condominioSelecionado");
+    const parsed = selected ? JSON.parse(selected) : null;
+    const { condominiumUuid } = getAuthContext();
+    const uuidCondominium = parsed?.uuid_condominium || condominiumUuid;
+    if (!uuidCondominium) return;
 
-    const novoAviso = {
-      id: `novo-${Date.now()}`,
-      titulo: formAviso.titulo.trim(),
-      data: new Date().toISOString().slice(0, 10),
-      tipo: formAviso.tipo,
-      status: "Ativo",
-      url: "#",
-    };
+    const formData = new FormData();
+    formData.append("file", formAviso.arquivo);
+    formData.append("uuidCondominium", uuidCondominium);
 
-    setAvisos((prev) => [novoAviso, ...prev]);
-    handleModalClose();
+    try {
+      await apiFetch("/note-data/document", {
+        method: "POST",
+        body: formData,
+      });
+      setLoading(true);
+      const data = await apiFetch(`/note-data/find-note-data/${uuidCondominium}`);
+      const normalized = (data || []).map((item) => {
+        const url = item.content || "#";
+        const fileName = String(url).split("/").pop() || "Documento";
+        return {
+          id: item.uuid_note_data || fileName,
+          titulo: fileName.replace(/[-_]/g, " "),
+          data: item.created_at ? String(item.created_at).slice(0, 10) : "-",
+          tipo: "Comunicado",
+          status: Number(item.read || 0) === 1 ? "Finalizado" : "Ativo",
+          url,
+          raw: item,
+        };
+      });
+      setAvisos(normalized);
+      handleModalClose();
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleToggleStatus = (id) => {
-    setAvisos((prev) =>
-      prev.map((aviso) =>
-        aviso.id === id
-          ? {
-              ...aviso,
-              status: aviso.status === "Ativo" ? "Finalizado" : "Ativo",
-            }
-          : aviso
-      )
-    );
+  const handleToggleStatus = async (id) => {
+    const aviso = avisos.find((item) => item.id === id);
+    if (!aviso?.raw?.uuid_note_data) {
+      setAvisos((prev) =>
+        prev.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                status: item.status === "Ativo" ? "Finalizado" : "Ativo",
+              }
+            : item
+        )
+      );
+      return;
+    }
+    const nextStatus = aviso.status === "Ativo" ? 1 : 0;
+    try {
+      await apiFetch("/note-data/update-read", {
+        method: "POST",
+        body: JSON.stringify({ uuid_note_data: aviso.raw.uuid_note_data, read: nextStatus }),
+      });
+      setAvisos((prev) =>
+        prev.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                status: item.status === "Ativo" ? "Finalizado" : "Ativo",
+              }
+            : item
+        )
+      );
+    } catch (error) {
+      console.error(error);
+    }
   };
 
   return (
@@ -152,8 +190,7 @@ function Avisos() {
                     Avisos e notificações
                   </MDTypography>
                   <MDTypography variant="button" color="text">
-                    Crie e gerencie avisos enviados aos moradores. Substitua o mock pela resposta da
-                    API.
+                    Crie e gerencie avisos enviados aos moradores.
                   </MDTypography>
                 </div>
                 <MDButton variant="gradient" color="info" onClick={handleAddClick}>

@@ -14,18 +14,34 @@ import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import Footer from "examples/Footer";
 
-const mockFetchCondominios = () =>
-  new Promise((resolve) =>
-    setTimeout(
-      () =>
-        resolve([
-          { id: "condo-01", nome: "Residencial Bela Vista", unidades: 120 },
-          { id: "condo-02", nome: "Condomínio Jardim das Águas", unidades: 80 },
-          { id: "condo-03", nome: "Edifício Horizonte", unidades: 64 },
-        ]),
-      400
-    )
-  );
+import { apiFetch } from "services/api";
+
+const parseUnitsFromBlocks = (blocksValue) => {
+  if (!blocksValue) return 0;
+  let blocks = blocksValue;
+  if (typeof blocksValue === "string") {
+    try {
+      blocks = JSON.parse(blocksValue);
+    } catch {
+      return 0;
+    }
+  }
+  if (!Array.isArray(blocks)) return 0;
+  return blocks.reduce((acc, block) => {
+    if (typeof block === "number") return acc + block;
+    if (typeof block === "object" && block) {
+      return (
+        acc +
+        (Number(block.units) ||
+          Number(block.apartments) ||
+          Number(block.total_units) ||
+          Number(block.totalUnits) ||
+          0)
+      );
+    }
+    return acc;
+  }, 0);
+};
 
 function Condominios() {
   const [condominios, setCondominios] = useState([]);
@@ -35,8 +51,18 @@ function Condominios() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const data = await mockFetchCondominios();
-        setCondominios(data);
+        const data = await apiFetch("/condominium/find-all");
+        const normalized = (data || []).map((condo) => ({
+          id: condo.uuid_condominium,
+          nome: condo.condominium_name,
+          unidades:
+            parseUnitsFromBlocks(condo.blocks) ||
+            Number(condo.total_units) ||
+            Number(condo.units) ||
+            0,
+          raw: condo,
+        }));
+        setCondominios(normalized);
       } finally {
         setLoading(false);
       }
@@ -46,7 +72,8 @@ function Condominios() {
   }, []);
 
   const handleSelect = (condominio) => {
-    localStorage.setItem("condominioSelecionado", JSON.stringify(condominio));
+    const selected = condominio?.raw || condominio;
+    localStorage.setItem("condominioSelecionado", JSON.stringify(selected));
     navigate("/");
   };
 

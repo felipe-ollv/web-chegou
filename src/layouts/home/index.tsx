@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import Grid from "@mui/material/Grid";
 import Card from "@mui/material/Card";
@@ -21,38 +21,11 @@ import MDTypography from "components/MDTypography";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import Footer from "examples/Footer";
+import { apiFetch } from "services/api";
+import { getAuthContext } from "services/auth";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
 
-const summary = [
-  { label: "Hoje", value: 24, helper: "+3 vs ontem", color: "info" },
-  { label: "Esta semana", value: 182, helper: "+18 vs semana passada", color: "warning" },
-  { label: "Este mês", value: 742, helper: "+6% vs mês passado", color: "success" },
-];
-
-const recebimentosPorHora = [
-  { hour: "08h", value: 12 },
-  { hour: "09h", value: 18 },
-  { hour: "10h", value: 22 },
-  { hour: "11h", value: 16 },
-  { hour: "12h", value: 8 },
-  { hour: "14h", value: 20 },
-  { hour: "15h", value: 24 },
-  { hour: "16h", value: 15 },
-  { hour: "17h", value: 10 },
-];
-
-const retiradasPorHora = [
-  { hour: "08h", value: 6 },
-  { hour: "09h", value: 9 },
-  { hour: "10h", value: 11 },
-  { hour: "11h", value: 13 },
-  { hour: "12h", value: 7 },
-  { hour: "14h", value: 12 },
-  { hour: "15h", value: 16 },
-  { hour: "16h", value: 18 },
-  { hour: "17h", value: 14 },
-];
 
 const baseBarOptions = {
   responsive: true,
@@ -109,6 +82,66 @@ StatCard.propTypes = {
 };
 
 function Home() {
+  const [summary, setSummary] = useState([
+    { label: "Hoje", value: 0, helper: "últimas 24h", color: "info" },
+    { label: "Esta semana", value: 0, helper: "últimos 7 dias", color: "warning" },
+    { label: "Este mês", value: 0, helper: "mês atual", color: "success" },
+  ]);
+  const [recebimentosPorHora, setRecebimentosPorHora] = useState([]);
+  const [retiradasPorHora, setRetiradasPorHora] = useState([]);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const { profileUuid } = getAuthContext();
+        if (!profileUuid) return;
+        const resp = await apiFetch(`/received-package/find-received-package/${profileUuid}?limit=200`);
+        const all = [...(resp?.deliver || []), ...(resp?.pickup || [])];
+        const now = new Date();
+        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const startOfWeek = new Date(startOfDay);
+        startOfWeek.setDate(startOfDay.getDate() - 6);
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+        let todayCount = 0;
+        let weekCount = 0;
+        let monthCount = 0;
+        const recebimentosByHour: Record<string, number> = {};
+        const retiradasByHour: Record<string, number> = {};
+
+        all.forEach((item) => {
+          const createdAt = new Date(item.created_at);
+          if (Number.isNaN(createdAt.getTime())) return;
+
+          if (createdAt >= startOfDay) todayCount += 1;
+          if (createdAt >= startOfWeek) weekCount += 1;
+          if (createdAt >= startOfMonth) monthCount += 1;
+
+          const hour = `${String(createdAt.getHours()).padStart(2, "0")}h`;
+          if (item.status_package === "DELIVERED") {
+            retiradasByHour[hour] = (retiradasByHour[hour] || 0) + 1;
+          } else {
+            recebimentosByHour[hour] = (recebimentosByHour[hour] || 0) + 1;
+          }
+        });
+
+        const hours = Array.from({ length: 10 }, (_, i) => `${String(i + 8).padStart(2, "0")}h`);
+        setRecebimentosPorHora(hours.map((hour) => ({ hour, value: recebimentosByHour[hour] || 0 })));
+        setRetiradasPorHora(hours.map((hour) => ({ hour, value: retiradasByHour[hour] || 0 })));
+
+        setSummary([
+          { label: "Hoje", value: todayCount, helper: "últimas 24h", color: "info" },
+          { label: "Esta semana", value: weekCount, helper: "últimos 7 dias", color: "warning" },
+          { label: "Este mês", value: monthCount, helper: "mês atual", color: "success" },
+        ]);
+      } catch (error) {
+        console.error(error);
+      }
+    };
+
+    fetchData();
+  }, []);
+
   const recebimentosChart = useMemo(
     () => ({
       labels: recebimentosPorHora.map((item) => item.hour),
@@ -121,7 +154,7 @@ function Home() {
         },
       ],
     }),
-    []
+    [recebimentosPorHora]
   );
 
   const retiradasChart = useMemo(
@@ -136,7 +169,7 @@ function Home() {
         },
       ],
     }),
-    []
+    [retiradasPorHora]
   );
 
   return (
@@ -146,7 +179,7 @@ function Home() {
         <Grid container spacing={3}>
           {summary.map((item) => (
             <Grid item xs={12} md={4} key={item.label}>
-              <StatCard label={item.label} value={item.value} helper={item.helper} />
+              <StatCard label={item.label} value={item.value} helper={item.helper} color={item.color} />
             </Grid>
           ))}
         </Grid>
@@ -159,7 +192,7 @@ function Home() {
                   Picos de recebimentos
                 </MDTypography>
                 <MDTypography variant="button" color="text">
-                  Distribuição por hora (dados mock). Conecte sua API para dados reais.
+                  Distribuição por hora (dados da API).
                 </MDTypography>
               </MDBox>
               <Divider />
@@ -176,7 +209,7 @@ function Home() {
                   Picos de retiradas
                 </MDTypography>
                 <MDTypography variant="button" color="text">
-                  Distribuição por hora (dados mock). Conecte sua API para dados reais.
+                  Distribuição por hora (dados da API).
                 </MDTypography>
               </MDBox>
               <Divider />
@@ -195,9 +228,8 @@ function Home() {
                   Próximos passos
                 </MDTypography>
                 <MDTypography component="div" variant="button" color="text">
-                  • Troque os dados mock por uma chamada à sua API. <br />
-                  • Crie filtros (dia/semana/mês) e use o resultado para atualizar os cards. <br />•
-                  Inclua tabelas de últimos recebimentos/retiradas se precisar de detalhe.
+                  • Use os filtros (dia/semana/mês) para evoluir os cards. <br />
+                  • Inclua tabelas de últimos recebimentos/retiradas se precisar de detalhe.
                 </MDTypography>
               </MDBox>
             </Card>

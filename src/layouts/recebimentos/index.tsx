@@ -29,65 +29,8 @@ import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import Footer from "examples/Footer";
 
-const mockFetchRecebimentos = () =>
-  new Promise((resolve) =>
-    setTimeout(
-      () =>
-        resolve([
-          {
-            id: "rec-01",
-            morador: "Ana Silva",
-            unidade: "Bloco A - 103",
-            bloco: "Bloco A",
-            item: "Pacote pequeno (Shopee)",
-            recebidoPor: "Camila - Portaria 1",
-            recebidoEm: "2024-05-12T09:10:00",
-            status: "Pendente",
-          },
-          {
-            id: "rec-02",
-            morador: "Bruno Costa",
-            unidade: "Bloco B - 207",
-            bloco: "Bloco B",
-            item: "Envelope (cartório)",
-            recebidoPor: "Carlos - Portaria 2",
-            recebidoEm: "2024-05-12T08:35:00",
-            status: "Pendente",
-          },
-          {
-            id: "rec-03",
-            morador: "Carla Nunes",
-            unidade: "Bloco A - 305",
-            bloco: "Bloco A",
-            item: "Pacote médio (Amazon)",
-            recebidoPor: "Camila - Portaria 1",
-            recebidoEm: "2024-05-11T18:10:00",
-            status: "Retirado",
-          },
-          {
-            id: "rec-04",
-            morador: "Diego Martins",
-            unidade: "Bloco C - 110",
-            bloco: "Bloco C",
-            item: "Correspondência interna",
-            recebidoPor: "Ricardo - Portaria 3",
-            recebidoEm: "2024-05-12T10:05:00",
-            status: "Pendente",
-          },
-          {
-            id: "rec-05",
-            morador: "Eduarda Melo",
-            unidade: "Bloco B - 504",
-            bloco: "Bloco B",
-            item: "Caixa refrigerada",
-            recebidoPor: "Carlos - Portaria 2",
-            recebidoEm: "2024-05-12T07:50:00",
-            status: "Pendente",
-          },
-        ]),
-      320
-    )
-  );
+import { apiFetch } from "services/api";
+import { getAuthContext } from "services/auth";
 
 const parseRecebidoEmDate = (value) => {
   if (!value) return null;
@@ -168,8 +111,26 @@ function Recebimentos() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const data = await mockFetchRecebimentos();
-        setRecebimentos(data);
+        const { profileUuid } = getAuthContext();
+        if (!profileUuid) {
+          setRecebimentos([]);
+          return;
+        }
+        const resp = await apiFetch(`/received-package/find-received-package/${profileUuid}`);
+        const all = [...(resp?.deliver || []), ...(resp?.pickup || [])];
+        const normalized = all.map((item) => ({
+          id: item.uuid_package,
+          morador: item.ownerName || "-",
+          unidade: `${item.blockOwner || "-"} - ${item.apartmentOwner || "-"}`,
+          bloco: item.blockOwner || "-",
+          item: item.note || "-",
+          recebidoPor: item.receiverName || "-",
+          recebidoEm: item.created_at,
+          status: item.status_package === "DELIVERED" ? "Retirado" : "Pendente",
+          confirmation_code: item.confirmation_code,
+          uuid_package: item.uuid_package,
+        }));
+        setRecebimentos(normalized);
       } finally {
         setLoading(false);
       }
@@ -226,32 +187,75 @@ function Recebimentos() {
     });
   }, [recebimentos, statusFilter, blocoFilter, dataFiltro]);
 
-  const handleRegistrarRetirada = (id) => {
-    setRecebimentos((prev) =>
-      prev.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              status: "Retirado",
-            }
-          : item
-      )
-    );
+  const handleRegistrarRetirada = async (id) => {
+    const item = recebimentos.find((row) => row.id === id);
+    if (!item) return;
+    try {
+      await apiFetch("/received-package/update-received-package", {
+        method: "PUT",
+        body: JSON.stringify({
+          uuid_package: item.uuid_package,
+          confirmation_code: item.confirmation_code,
+        }),
+      });
+      setRecebimentos((prev) =>
+        prev.map((row) =>
+          row.id === id
+            ? {
+                ...row,
+                status: "Retirado",
+              }
+            : row
+        )
+      );
+    } catch (error) {
+      console.error(error);
+    }
   };
 
-  const handleNovoRecebimento = () => {
-    const agora = new Date();
-    const novo = {
-      id: `rec-${Date.now()}`,
-      morador: "Novo morador",
-      unidade: "Bloco A - 999",
-      bloco: "Bloco A",
-      item: "Item adicionado via mock",
-      recebidoPor: "Portaria",
-      recebidoEm: agora.toISOString(),
-      status: "Pendente",
-    };
-    setRecebimentos((prev) => [novo, ...prev]);
+  const handleNovoRecebimento = async () => {
+    const { profileUuid } = getAuthContext();
+    if (!profileUuid) return;
+    const block = window.prompt("Bloco (ex.: Bloco A)");
+    if (!block) return;
+    const apartment = window.prompt("Apartamento (ex.: 101)");
+    if (!apartment) return;
+    const recipient = window.prompt("Nome do morador");
+    if (!recipient) return;
+    const note = window.prompt("Descrição do item");
+
+    try {
+      await apiFetch("/received-package/create-received-package", {
+        method: "POST",
+        body: JSON.stringify({
+          block,
+          apartment,
+          recipient,
+          note: note || "",
+          received: profileUuid,
+        }),
+      });
+      setLoading(true);
+      const resp = await apiFetch(`/received-package/find-received-package/${profileUuid}`);
+      const all = [...(resp?.deliver || []), ...(resp?.pickup || [])];
+      const normalized = all.map((item) => ({
+        id: item.uuid_package,
+        morador: item.ownerName || "-",
+        unidade: `${item.blockOwner || "-"} - ${item.apartmentOwner || "-"}`,
+        bloco: item.blockOwner || "-",
+        item: item.note || "-",
+        recebidoPor: item.receiverName || "-",
+        recebidoEm: item.created_at,
+        status: item.status_package === "DELIVERED" ? "Retirado" : "Pendente",
+        confirmation_code: item.confirmation_code,
+        uuid_package: item.uuid_package,
+      }));
+      setRecebimentos(normalized);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -286,8 +290,7 @@ function Recebimentos() {
                     Recebimentos
                   </MDTypography>
                   <MDTypography variant="button" color="text">
-                    Dados mockados. Troque pela sua chamada de API e registre retirada quando o
-                    morador buscar o item.
+                    Dados da API. Registre a retirada quando o morador buscar o item.
                   </MDTypography>
                 </div>
                 <MDButton variant="gradient" color="info" onClick={handleNovoRecebimento}>

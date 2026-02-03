@@ -20,43 +20,8 @@ import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import Footer from "examples/Footer";
 
-const mockFetchMoradores = () =>
-  new Promise((resolve) =>
-    setTimeout(
-      () =>
-        resolve([
-          {
-            id: "1",
-            nome: "Ana Silva",
-            unidade: "Bloco A - 103",
-            telefone: "(11) 98888-1122",
-            status: "Ativo",
-          },
-          {
-            id: "2",
-            nome: "Bruno Costa",
-            unidade: "Bloco B - 207",
-            telefone: "(11) 97777-3344",
-            status: "Ativo",
-          },
-          {
-            id: "3",
-            nome: "Carla Nunes",
-            unidade: "Bloco A - 305",
-            telefone: "(11) 96666-5566",
-            status: "Desativado",
-          },
-          {
-            id: "4",
-            nome: "Diego Martins",
-            unidade: "Bloco C - 110",
-            telefone: "(11) 95555-7788",
-            status: "Ativo",
-          },
-        ]),
-      350
-    )
-  );
+import { apiFetch } from "services/api";
+import { getAuthContext } from "services/auth";
 
 const statusColor = {
   Ativo: "success",
@@ -71,8 +36,24 @@ function Moradores() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const data = await mockFetchMoradores();
-        setMoradores(data);
+        const selected = localStorage.getItem("condominioSelecionado");
+        const parsed = selected ? JSON.parse(selected) : null;
+        const { condominiumUuid } = getAuthContext();
+        const uuidCondominium = parsed?.uuid_condominium || condominiumUuid;
+        if (!uuidCondominium) {
+          setMoradores([]);
+          return;
+        }
+        const data = await apiFetch(`/user-profile/find-residents/${uuidCondominium}`);
+        const normalized = (data || []).map((row, index) => ({
+          id: row.uuid_user_profile || `${row.name}-${index}`,
+          nome: row.name,
+          unidade: `${row.apartment_block} - ${row.apartment}`,
+          telefone: row.phone_number || "-",
+          status:
+            row.access_status === "ACTIVE" && Number(row.deleted || 0) === 0 ? "Ativo" : "Desativado",
+        }));
+        setMoradores(normalized);
       } finally {
         setLoading(false);
       }
@@ -94,7 +75,7 @@ function Moradores() {
                     Moradores
                   </MDTypography>
                   <MDTypography variant="button" color="text">
-                    Lista básica com dados mock. Substitua pelo retorno da API.
+                    Lista de moradores vinda da API.
                   </MDTypography>
                 </div>
               </MDBox>
