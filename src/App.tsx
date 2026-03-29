@@ -9,7 +9,6 @@ import Sidenav from "examples/Sidenav";
 
 import theme from "assets/theme";
 import themeRTL from "assets/theme/theme-rtl";
-
 import themeDark from "assets/theme-dark";
 import themeDarkRTL from "assets/theme-dark/theme-rtl";
 
@@ -17,8 +16,20 @@ import { CacheProvider } from "@emotion/react";
 import createCache, { EmotionCache } from "@emotion/cache";
 
 import routes, { AppRoute } from "routes";
-
 import { useMaterialUIController, setMiniSidenav } from "context";
+import { isTokenValid, clearAuthToken } from "services/auth";
+
+// ─── Proteção de rota ─────────────────────────────────────────────────────────
+
+function RotaProtegida({ children }: { children: ReactNode }) {
+  if (!isTokenValid()) {
+    clearAuthToken();
+    return <Navigate to="/entrar" replace />;
+  }
+  return <>{children}</>;
+}
+
+// ─── Geração de <Route> ───────────────────────────────────────────────────────
 
 const getRoutes = (allRoutes: AppRoute[]): ReactNode =>
   allRoutes.flatMap((route) => {
@@ -27,21 +38,22 @@ const getRoutes = (allRoutes: AppRoute[]): ReactNode =>
     }
 
     if (route.route && route.component) {
-      return <Route path={route.route} element={route.component} key={route.key} />;
+      const element = route.public ? (
+        route.component
+      ) : (
+        <RotaProtegida>{route.component}</RotaProtegida>
+      );
+      return <Route path={route.route} element={element} key={route.key} />;
     }
 
     return [];
   });
 
+// ─── App ──────────────────────────────────────────────────────────────────────
+
 export default function App() {
   const [controller, dispatch] = useMaterialUIController();
-  const {
-    miniSidenav,
-    direction,
-    layout,
-    sidenavColor,
-    darkMode,
-  } = controller;
+  const { miniSidenav, direction, layout, sidenavColor, darkMode } = controller;
   const [onMouseEnter, setOnMouseEnter] = useState(false);
   const rtlCache = useMemo<EmotionCache>(() => createCache({ key: "rtl" }), []);
   const { pathname } = useLocation();
@@ -69,47 +81,53 @@ export default function App() {
     document.scrollingElement.scrollTop = 0;
   }, [pathname]);
 
-  return direction === "rtl" ? (
-    <CacheProvider value={rtlCache}>
-      <ThemeProvider theme={darkMode ? themeDarkRTL : themeRTL}>
-        <CssBaseline />
-        {layout === "dashboard" && (
-          <>
-            <Sidenav
-              color={sidenavColor}
-              brandName="ChegouApp"
-              brand={null}
-              routes={routes}
-              onMouseEnter={handleOnMouseEnter}
-              onMouseLeave={handleOnMouseLeave}
-            />
-          </>
-        )}
-        <Routes>
-          {getRoutes(routes)}
-          <Route path="*" element={<Navigate to="/" />} />
-        </Routes>
-      </ThemeProvider>
-    </CacheProvider>
-  ) : (
+  const sidebar = layout === "dashboard" && (
+    <Sidenav
+      color={sidenavColor}
+      brandName="ChegouApp"
+      brand={null}
+      routes={routes}
+      onMouseEnter={handleOnMouseEnter}
+      onMouseLeave={handleOnMouseLeave}
+    />
+  );
+
+  const appRoutes = (
+    <Routes>
+      {getRoutes(routes)}
+      {/* Raiz redireciona para /inicio se autenticado, senão para /entrar */}
+      <Route
+        path="/"
+        element={
+          isTokenValid() ? (
+            <Navigate to="/inicio" replace />
+          ) : (
+            <Navigate to="/entrar" replace />
+          )
+        }
+      />
+      {/* Qualquer rota desconhecida vai para a raiz */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+
+  if (direction === "rtl") {
+    return (
+      <CacheProvider value={rtlCache}>
+        <ThemeProvider theme={darkMode ? themeDarkRTL : themeRTL}>
+          <CssBaseline />
+          {sidebar}
+          {appRoutes}
+        </ThemeProvider>
+      </CacheProvider>
+    );
+  }
+
+  return (
     <ThemeProvider theme={darkMode ? themeDark : theme}>
       <CssBaseline />
-      {layout === "dashboard" && (
-        <>
-          <Sidenav
-            color={sidenavColor}
-            brandName="ChegouApp"
-            brand={null}
-            routes={routes}
-            onMouseEnter={handleOnMouseEnter}
-            onMouseLeave={handleOnMouseLeave}
-          />
-        </>
-      )}
-      <Routes>
-        {getRoutes(routes)}
-        <Route path="*" element={<Navigate to="/" />} />
-      </Routes>
+      {sidebar}
+      {appRoutes}
     </ThemeProvider>
   );
 }

@@ -14,7 +14,7 @@ import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import Footer from "examples/Footer";
 
-import { apiFetch } from "services/api";
+import api from "services/api";
 
 const parseUnitsFromBlocks = (blocksValue) => {
   if (!blocksValue) return 0;
@@ -51,7 +51,7 @@ function Condominios() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const data = await apiFetch("/condominium/find-all");
+        const data = await api.get("/condominium/find-all");
         const normalized = (data || []).map((condo) => ({
           id: condo.uuid_condominium,
           nome: condo.condominium_name,

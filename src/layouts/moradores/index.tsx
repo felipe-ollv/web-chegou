@@ -20,7 +20,7 @@ import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import Footer from "examples/Footer";
 
-import { apiFetch } from "services/api";
+import api from "services/api";
 import { getAuthContext } from "services/auth";
 
 const statusColor = {
@@ -44,7 +44,7 @@ function Moradores() {
           setMoradores([]);
           return;
         }
-        const data = await apiFetch(`/user-profile/find-residents/${uuidCondominium}`);
+        const data = await api.get(`/user-profile/find-residents/${uuidCondominium}`);
         const normalized = (data || []).map((row, index) => ({
           id: row.uuid_user_profile || `${row.name}-${index}`,
           nome: row.name,

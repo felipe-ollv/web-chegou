@@ -1,47 +1,50 @@
-import { getAuthToken } from "./auth";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3006/api";
+import axios from 'axios';
+import { jwtDecode } from 'jwt-decode';
 
-type ApiOptions = RequestInit & {
-  auth?: boolean;
+const api = axios.create({
+  baseURL: 'https://app-chegou.com.br/api/painel',
+});
+
+let token: string | null = null;
+let setUserDataGlobal: ((data: any) => void) | undefined;
+
+export const setToken = (newToken: string | null) => {
+  token = newToken;
 };
 
-const buildHeaders = (options?: ApiOptions, hasBody?: boolean) => {
-  const headers = new Headers(options?.headers || {});
-  if (hasBody && !headers.has("Content-Type")) {
-    headers.set("Content-Type", "application/json");
-  }
-  if (options?.auth !== false) {
-    const token = getAuthToken();
-    if (token) headers.set("Authorization", `Bearer ${token}`);
-  }
-  return headers;
+export const setUserDataSetter = (setter: (data: any) => void) => {
+  setUserDataGlobal = setter;
 };
 
-export const apiFetch = async <T = any>(path: string, options: ApiOptions = {}): Promise<T> => {
-  const isFormData = options.body instanceof FormData;
-  const headers = buildHeaders(options, !!options.body && !isFormData);
-
-  const response = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers,
-  });
-
-  if (!response.ok) {
-    let message = `Erro ${response.status}`;
-    try {
-      const payload = await response.json();
-      message = payload?.message || payload?.error || message;
-    } catch {
-      // ignore
+api.interceptors.request.use(
+  async (config) => {
+    if (!token) {
+      if (token && setUserDataGlobal) {
+        try {
+          const decoded = jwtDecode(token);
+          setUserDataGlobal(decoded);
+        } catch (e) {
+          console.log("Erro ao decodificar token no intercept", e);
+        }
+      }
     }
-    throw new Error(message);
-  }
 
-  if (response.status === 204) {
-    return null as T;
-  }
+    const publicPaths = ['/validate/access'];
+    const isPublic = publicPaths.some(path => config.url?.startsWith(path));
 
-  return (await response.json()) as T;
-};
+    if (!isPublic && !token) {
+      // routes.replace("/"); 
+      return Promise.reject("Token ausente");
+    }
 
+    if (!isPublic && token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+export default api;

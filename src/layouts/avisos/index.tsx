@@ -30,7 +30,7 @@ import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import Footer from "examples/Footer";
 
-import { apiFetch } from "services/api";
+import api from "services/api";
 import { getAuthContext } from "services/auth";
 
 const tipoColor = {
@@ -68,7 +68,7 @@ function Avisos() {
           setAvisos([]);
           return;
         }
-        const data = await apiFetch(`/note-data/find-note-data/${uuidCondominium}`);
+        const data = await api.get(`/note-data/find-note-data/${uuidCondominium}`);
         const normalized = (data || []).map((item) => {
           const url = item.content || "#";
           const fileName = String(url).split("/").pop() || "Documento";
@@ -113,12 +113,12 @@ function Avisos() {
     formData.append("uuidCondominium", uuidCondominium);
 
     try {
-      await apiFetch("/note-data/document", {
+      await api.post("/note-data/document", {
         method: "POST",
         body: formData,
       });
       setLoading(true);
-      const data = await apiFetch(`/note-data/find-note-data/${uuidCondominium}`);
+      const data = await api.get(`/note-data/find-note-data/${uuidCondominium}`);
       const normalized = (data || []).map((item) => {
         const url = item.content || "#";
         const fileName = String(url).split("/").pop() || "Documento";
@@ -158,7 +158,7 @@ function Avisos() {
     }
     const nextStatus = aviso.status === "Ativo" ? 1 : 0;
     try {
-      await apiFetch("/note-data/update-read", {
+      await api.post("/note-data/update-read", {
         method: "POST",
         body: JSON.stringify({ uuid_note_data: aviso.raw.uuid_note_data, read: nextStatus }),
       });

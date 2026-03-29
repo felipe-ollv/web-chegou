@@ -29,7 +29,7 @@ import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import Footer from "examples/Footer";
 
-import { apiFetch } from "services/api";
+import api from "services/api";
 import { getAuthContext } from "services/auth";
 
 const parseRecebidoEmDate = (value) => {
@@ -116,7 +116,7 @@ function Recebimentos() {
           setRecebimentos([]);
           return;
         }
-        const resp = await apiFetch(`/received-package/find-received-package/${profileUuid}`);
+        const resp: any = await api.get(`/received-package/find-received-package/${profileUuid}`);
         const all = [...(resp?.deliver || []), ...(resp?.pickup || [])];
         const normalized = all.map((item) => ({
           id: item.uuid_package,
@@ -191,7 +191,7 @@ function Recebimentos() {
     const item = recebimentos.find((row) => row.id === id);
     if (!item) return;
     try {
-      await apiFetch("/received-package/update-received-package", {
+      await api.put("/received-package/update-received-package", {
         method: "PUT",
         body: JSON.stringify({
           uuid_package: item.uuid_package,
@@ -225,7 +225,7 @@ function Recebimentos() {
     const note = window.prompt("Descrição do item");
 
     try {
-      await apiFetch("/received-package/create-received-package", {
+      await api.post("/received-package/create-received-package", {
         method: "POST",
         body: JSON.stringify({
           block,
@@ -236,7 +236,7 @@ function Recebimentos() {
         }),
       });
       setLoading(true);
-      const resp = await apiFetch(`/received-package/find-received-package/${profileUuid}`);
+      const resp = await api.get(`/received-package/find-received-package/${profileUuid}`);
       const all = [...(resp?.deliver || []), ...(resp?.pickup || [])];
       const normalized = all.map((item) => ({
         id: item.uuid_package,

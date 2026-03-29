@@ -3,17 +3,27 @@ type AuthPayload = {
   ps?: string;
   cs?: string;
   ts?: string;
+  exp?: number;
 };
 
-const TOKEN_KEYS = ["chegou:token", "token"];
+const TOKEN_KEY = "chegou:token";
+
+// ─── Token Storage ────────────────────────────────────────────────────────────
 
 export const getAuthToken = (): string | null => {
-  for (const key of TOKEN_KEYS) {
-    const token = localStorage.getItem(key);
-    if (token) return token;
-  }
-  return null;
+  return localStorage.getItem(TOKEN_KEY);
 };
+
+export const saveAuthToken = (token: string): void => {
+  localStorage.setItem(TOKEN_KEY, token);
+};
+
+export const clearAuthToken = (): void => {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem("condominioSelecionado");
+};
+
+// ─── JWT Decode ───────────────────────────────────────────────────────────────
 
 export const decodeJwt = (token: string): AuthPayload | null => {
   try {
@@ -26,6 +36,8 @@ export const decodeJwt = (token: string): AuthPayload | null => {
     return null;
   }
 };
+
+// ─── Auth Context ─────────────────────────────────────────────────────────────
 
 export const getAuthContext = (): {
   profileUuid?: string;
@@ -43,3 +55,24 @@ export const getAuthContext = (): {
   };
 };
 
+// ─── Validações ───────────────────────────────────────────────────────────────
+
+export const isTokenValid = (): boolean => {
+  const token = getAuthToken();
+  if (!token) return false;
+  const payload = decodeJwt(token);
+  if (!payload) return false;
+  if (payload.exp) {
+    const nowInSeconds = Math.floor(Date.now() / 1000);
+    if (nowInSeconds >= payload.exp) {
+      clearAuthToken();
+      return false;
+    }
+  }
+  return true;
+};
+
+export const isSindico = (): boolean => {
+  const { profileType } = getAuthContext();
+  return profileType === "SINDICO" || profileType === "MANAGER" || profileType === "ADMIN";
+};

@@ -17,15 +17,28 @@ export type AppRoute = {
   route?: string;
   component?: ReactNode;
   collapse?: AppRoute[];
+  // Rotas sem este flag ficam protegidas por autenticação
+  public?: boolean;
 };
 
 const routes: AppRoute[] = [
+  // ─── Rota pública ─────────────────────────────────────────────────────────
+  {
+    type: "route",
+    name: "Login",
+    key: "login",
+    route: "/entrar",        // URL pública em português
+    component: <Login />,
+    public: true,
+  },
+
+  // ─── Rotas protegidas (sidebar) ───────────────────────────────────────────
   {
     type: "collapse",
     name: "Início",
     key: "home",
     icon: <Icon fontSize="small">home</Icon>,
-    route: "/",
+    route: "/inicio",
     component: <Home />,
   },
   {
@@ -59,13 +72,6 @@ const routes: AppRoute[] = [
     icon: <Icon fontSize="small">notifications</Icon>,
     route: "/avisos",
     component: <Avisos />,
-  },
-  {
-    type: "route",
-    name: "Login",
-    key: "login",
-    route: "/login",
-    component: <Login />,
   },
 ];
 

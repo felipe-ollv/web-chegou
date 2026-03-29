@@ -21,7 +21,7 @@ import MDTypography from "components/MDTypography";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import Footer from "examples/Footer";
-import { apiFetch } from "services/api";
+import api from "services/api";
 import { getAuthContext } from "services/auth";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
@@ -95,7 +95,7 @@ function Home() {
       try {
         const { profileUuid } = getAuthContext();
         if (!profileUuid) return;
-        const resp = await apiFetch(`/received-package/find-received-package/${profileUuid}?limit=200`);
+        const resp: any = await api.get(`/received-package/find-received-package/${profileUuid}?limit=200`);
         const all = [...(resp?.deliver || []), ...(resp?.pickup || [])];
         const now = new Date();
         const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
