@@ -4,6 +4,10 @@ import { lighten, useTheme } from "@mui/material/styles";
 
 import Card from "@mui/material/Card";
 import Chip from "@mui/material/Chip";
+import Dialog from "@mui/material/Dialog";
+import DialogActions from "@mui/material/DialogActions";
+import DialogContent from "@mui/material/DialogContent";
+import DialogTitle from "@mui/material/DialogTitle";
 import Divider from "@mui/material/Divider";
 import FormControl from "@mui/material/FormControl";
 import Grid from "@mui/material/Grid";
@@ -16,6 +20,7 @@ import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
 import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
+import TablePagination from "@mui/material/TablePagination";
 import TableRow from "@mui/material/TableRow";
 import TextField from "@mui/material/TextField";
 
@@ -32,7 +37,30 @@ import Footer from "examples/Footer";
 import api from "services/api";
 import { getAuthContext } from "services/auth";
 
-const parseRecebidoEmDate = (value) => {
+const EMPTY_RECEIPT_FORM = {
+  block: "",
+  apartment: "",
+  recipient: "",
+  note: "",
+};
+
+const normalizeReceipts = (data) => {
+  const all = [...(data?.deliver || []), ...(data?.pickup || [])];
+  return all.map((item) => ({
+    id: item.uuid_package,
+    residentName: item.ownerName || "-",
+    unit: `${item.blockOwner || "-"} - ${item.apartmentOwner || "-"}`,
+    block: item.blockOwner || "-",
+    note: item.note || "-",
+    receivedBy: item.receiverName || "-",
+    receivedAt: item.created_at,
+    status: item.status_package === "DELIVERED" ? "Retirado" : "Pendente",
+    confirmation_code: item.confirmation_code,
+    uuid_package: item.uuid_package,
+  }));
+};
+
+const parseReceivedAtDate = (value) => {
   if (!value) return null;
   const parsed = new Date(value);
   if (!Number.isNaN(parsed.getTime())) return parsed;
@@ -45,38 +73,36 @@ const parseRecebidoEmDate = (value) => {
   return Number.isNaN(legacy.getTime()) ? null : legacy;
 };
 
-const formatRecebidoEmLabel = (value) => {
-  const date = parseRecebidoEmDate(value);
+const formatReceivedAtLabel = (value) => {
+  const date = parseReceivedAtDate(value);
   if (!date) return value || "-";
   const datePart = date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
   const timePart = date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   return `${datePart} ${timePart}`;
 };
 
-function ResumoCard({ label, value, helper, color }) {
+function SummaryCard({ label, value, helper, color }) {
   return (
     <Card
-      sx={({ palette, functions: { linearGradient } }) => {
-        const base = palette[color]?.main || palette.info.main;
-        const to = lighten(base, 0.15);
-        const from = lighten(base, 0.3);
-        return {
-          background: linearGradient(from, to),
-          color: palette.common.white,
-          "& .resumo-card__text": { color: palette.common.white },
-        };
-      }}
+      sx={(theme) => ({
+        background: `linear-gradient(135deg, ${
+          lighten(theme.palette[color]?.main || theme.palette.info.main, 0.14)
+        }, ${lighten(theme.palette[color]?.dark || theme.palette.info.dark, 0.06)})`,
+        color: theme.palette.common.white,
+        "& .summary-card__text": { color: theme.palette.common.white },
+      })}
     >
-      <MDBox p={2.5}>
-        <MDTypography className="resumo-card__text" variant="h6" fontWeight="medium" color="inherit">
+      <MDBox height="4px" borderRadius="md" bgColor="white" opacity={0.4} />
+      <MDBox p={2.5} color="inherit">
+        <MDTypography className="summary-card__text" variant="h6" fontWeight="medium" color="inherit">
           {label}
         </MDTypography>
-        <MDTypography className="resumo-card__text" variant="h3" fontWeight="bold" color="inherit">
+        <MDTypography className="summary-card__text" variant="h3" fontWeight="bold" color="inherit">
           {value}
         </MDTypography>
         {helper && (
           <MDTypography
-            className="resumo-card__text"
+            className="summary-card__text"
             variant="button"
             color="inherit"
             opacity={0.9}
@@ -89,95 +115,89 @@ function ResumoCard({ label, value, helper, color }) {
   );
 }
 
-ResumoCard.defaultProps = {
+SummaryCard.defaultProps = {
   helper: "",
 };
 
-ResumoCard.propTypes = {
+SummaryCard.propTypes = {
   label: PropTypes.string.isRequired,
   value: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
   helper: PropTypes.string,
   color: PropTypes.string.isRequired,
 };
 
-function Recebimentos() {
+function Receipts() {
   const theme = useTheme();
-  const [recebimentos, setRecebimentos] = useState([]);
+  const [receipts, setReceipts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("todos");
-  const [blocoFilter, setBlocoFilter] = useState("todos");
-  const [dataFiltro, setDataFiltro] = useState("");
+  const [blockFilter, setBlockFilter] = useState("todos");
+  const [dateFilter, setDateFilter] = useState("");
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [receiptForm, setReceiptForm] = useState(EMPTY_RECEIPT_FORM);
+  const [formError, setFormError] = useState("");
+  const [isSavingReceipt, setIsSavingReceipt] = useState(false);
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+
+  const loadReceipts = async () => {
+    setLoading(true);
+    try {
+      const { data } = await api.get(
+        `/received-package/find-received-package/9df71478-4a39-42df-9419-f4ebebfd7d66?limit=200`
+      );
+      setReceipts(normalizeReceipts(data));
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const { profileUuid } = getAuthContext();
-        if (!profileUuid) {
-          setRecebimentos([]);
-          return;
-        }
-        const resp: any = await api.get(`/received-package/find-received-package/${profileUuid}`);
-        const all = [...(resp?.deliver || []), ...(resp?.pickup || [])];
-        const normalized = all.map((item) => ({
-          id: item.uuid_package,
-          morador: item.ownerName || "-",
-          unidade: `${item.blockOwner || "-"} - ${item.apartmentOwner || "-"}`,
-          bloco: item.blockOwner || "-",
-          item: item.note || "-",
-          recebidoPor: item.receiverName || "-",
-          recebidoEm: item.created_at,
-          status: item.status_package === "DELIVERED" ? "Retirado" : "Pendente",
-          confirmation_code: item.confirmation_code,
-          uuid_package: item.uuid_package,
-        }));
-        setRecebimentos(normalized);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
+    loadReceipts();
   }, []);
 
   const totals = useMemo(
     () =>
-      recebimentos.reduce(
+      receipts.reduce(
         (acc, item) => {
-          if (item.status === "Pendente") acc.pendentes += 1;
-          if (item.status === "Retirado") acc.retirados += 1;
+          acc.registered += 1;
+          if (item.status === "Pendente") acc.pending += 1;
+          if (item.status === "Retirado") acc.delivered += 1;
           return acc;
         },
-        { pendentes: 0, retirados: 0 }
+        { registered: 0, pending: 0, delivered: 0 }
       ),
-    [recebimentos]
+    [receipts]
   );
 
-  const blocos = useMemo(
-    () => Array.from(new Set(recebimentos.map((item) => item.bloco))),
-    [recebimentos]
+  const blocks = useMemo(
+    () => Array.from(new Set(receipts.map((item) => item.block))),
+    [receipts]
   );
 
-  const filteredRecebimentos = useMemo(() => {
-    const selectedDate = dataFiltro ? new Date(dataFiltro) : null;
+  const filteredReceipts = useMemo(() => {
+    const selectedDate = dateFilter ? new Date(dateFilter) : null;
 
     if (selectedDate) selectedDate.setHours(0, 0, 0, 0);
     const selectedEnd = selectedDate ? new Date(selectedDate.getTime()) : null;
     if (selectedEnd) selectedEnd.setHours(23, 59, 59, 999);
 
-    return recebimentos.filter((item) => {
+    return receipts.filter((item) => {
       if (statusFilter !== "todos" && item.status !== statusFilter) {
         return false;
       }
-      if (blocoFilter !== "todos" && item.bloco !== blocoFilter) {
+      if (blockFilter !== "todos" && item.block !== blockFilter) {
         return false;
       }
 
       if (selectedDate) {
-        const recebimentoDate = parseRecebidoEmDate(item.recebidoEm);
+        const receiptDate = parseReceivedAtDate(item.receivedAt);
         if (
-          !recebimentoDate ||
-          recebimentoDate.getTime() < selectedDate.getTime() ||
-          recebimentoDate.getTime() > selectedEnd.getTime()
+          !receiptDate ||
+          receiptDate.getTime() < selectedDate.getTime() ||
+          receiptDate.getTime() > selectedEnd.getTime()
         ) {
           return false;
         }
@@ -185,20 +205,35 @@ function Recebimentos() {
 
       return true;
     });
-  }, [recebimentos, statusFilter, blocoFilter, dataFiltro]);
+  }, [receipts, statusFilter, blockFilter, dateFilter]);
 
-  const handleRegistrarRetirada = async (id) => {
-    const item = recebimentos.find((row) => row.id === id);
+  const paginatedReceipts = useMemo(
+    () => filteredReceipts.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
+    [filteredReceipts, page, rowsPerPage]
+  );
+
+  useEffect(() => {
+    setPage(0);
+  }, [statusFilter, blockFilter, dateFilter]);
+
+  const handleChangePage = (event, newPage) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
+
+  const handleRegisterPickup = async (id) => {
+    const item = receipts.find((row) => row.id === id);
     if (!item) return;
     try {
       await api.put("/received-package/update-received-package", {
-        method: "PUT",
-        body: JSON.stringify({
-          uuid_package: item.uuid_package,
-          confirmation_code: item.confirmation_code,
-        }),
+        uuid_package: item.uuid_package,
+        confirmation_code: item.confirmation_code,
       });
-      setRecebimentos((prev) =>
+      setReceipts((prev) =>
         prev.map((row) =>
           row.id === id
             ? {
@@ -213,48 +248,51 @@ function Recebimentos() {
     }
   };
 
-  const handleNovoRecebimento = async () => {
+  const handleNewReceipt = () => {
+    setFormError("");
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    if (isSavingReceipt) return;
+    setIsModalOpen(false);
+    setReceiptForm(EMPTY_RECEIPT_FORM);
+    setFormError("");
+  };
+
+  const handleSaveReceipt = async () => {
     const { profileUuid } = getAuthContext();
-    if (!profileUuid) return;
-    const block = window.prompt("Bloco (ex.: Bloco A)");
-    if (!block) return;
-    const apartment = window.prompt("Apartamento (ex.: 101)");
-    if (!apartment) return;
-    const recipient = window.prompt("Nome do morador");
-    if (!recipient) return;
-    const note = window.prompt("Descrição do item");
+    const block = receiptForm.block.trim();
+    const apartment = receiptForm.apartment.trim();
+    const recipient = receiptForm.recipient.trim();
+    const note = receiptForm.note.trim();
+
+    if (!profileUuid) {
+      setFormError("Não foi possível identificar o usuário logado.");
+      return;
+    }
+
+    if (!block || !apartment || !recipient) {
+      setFormError("Preencha bloco, apartamento e nome do morador.");
+      return;
+    }
 
     try {
+      setIsSavingReceipt(true);
       await api.post("/received-package/create-received-package", {
-        method: "POST",
-        body: JSON.stringify({
-          block,
-          apartment,
-          recipient,
-          note: note || "",
-          received: profileUuid,
-        }),
+        block,
+        apartment,
+        recipient,
+        note,
+        received: profileUuid,
       });
-      setLoading(true);
-      const resp = await api.get(`/received-package/find-received-package/${profileUuid}`);
-      const all = [...(resp?.deliver || []), ...(resp?.pickup || [])];
-      const normalized = all.map((item) => ({
-        id: item.uuid_package,
-        morador: item.ownerName || "-",
-        unidade: `${item.blockOwner || "-"} - ${item.apartmentOwner || "-"}`,
-        bloco: item.blockOwner || "-",
-        item: item.note || "-",
-        recebidoPor: item.receiverName || "-",
-        recebidoEm: item.created_at,
-        status: item.status_package === "DELIVERED" ? "Retirado" : "Pendente",
-        confirmation_code: item.confirmation_code,
-        uuid_package: item.uuid_package,
-      }));
-      setRecebimentos(normalized);
+      handleCloseModal();
+      await loadReceipts();
     } catch (error) {
       console.error(error);
+      setFormError("Não foi possível registrar o recebimento. Tente novamente.");
     } finally {
-      setLoading(false);
+      setIsSavingReceipt(false);
     }
   };
 
@@ -263,18 +301,26 @@ function Recebimentos() {
       <DashboardNavbar />
       <MDBox py={3}>
         <Grid container spacing={3}>
-          <Grid item xs={12} md={6}>
-            <ResumoCard
+          <Grid item xs={12} md={4}>
+            <SummaryCard
+              label="Registrados"
+              value={totals.registered}
+              helper="Total de recebimentos"
+              color="info"
+            />
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <SummaryCard
               label="Pendentes"
-              value={totals.pendentes}
+              value={totals.pending}
               helper="Aguardando retirada"
               color="warning"
             />
           </Grid>
-          <Grid item xs={12} md={6}>
-            <ResumoCard
+          <Grid item xs={12} md={4}>
+            <SummaryCard
               label="Retirados"
-              value={totals.retirados}
+              value={totals.delivered}
               helper="Movimentações registradas"
               color="success"
             />
@@ -293,7 +339,7 @@ function Recebimentos() {
                     Dados da API. Registre a retirada quando o morador buscar o item.
                   </MDTypography>
                 </div>
-                <MDButton variant="gradient" color="info" onClick={handleNovoRecebimento}>
+                <MDButton variant="gradient" color="info" onClick={handleNewReceipt}>
                   <Icon sx={{ mr: 1 }}>add</Icon> Novo recebimento
                 </MDButton>
               </MDBox>
@@ -322,14 +368,14 @@ function Recebimentos() {
                   <InputLabel id="bloco-filter-label">Bloco</InputLabel>
                   <Select
                     labelId="bloco-filter-label"
-                    value={blocoFilter}
+                    value={blockFilter}
                     label="Bloco"
-                    onChange={(event) => setBlocoFilter(event.target.value)}
+                    onChange={(event) => setBlockFilter(event.target.value)}
                   >
                     <MenuItem value="todos">Todos</MenuItem>
-                    {blocos.map((bloco) => (
-                      <MenuItem key={bloco} value={bloco}>
-                        {bloco}
+                    {blocks.map((block) => (
+                      <MenuItem key={block} value={block}>
+                        {block}
                       </MenuItem>
                     ))}
                   </Select>
@@ -338,8 +384,8 @@ function Recebimentos() {
                   size="small"
                   type="date"
                   label="Data Recebimento"
-                  value={dataFiltro}
-                  onChange={(event) => setDataFiltro(event.target.value)}
+                  value={dateFilter}
+                  onChange={(event) => setDateFilter(event.target.value)}
                   InputLabelProps={{ shrink: true }}
                   sx={{ minWidth: 180, ".MuiOutlinedInput-root": { minHeight: 44 } }}
                 />
@@ -358,12 +404,12 @@ function Recebimentos() {
                   </TableHead>
                   <TableBody>
                     {!loading &&
-                      filteredRecebimentos.map((item) => (
+                      paginatedReceipts.map((item) => (
                         <TableRow key={item.id}>
-                          <TableCell>{item.morador}</TableCell>
-                          <TableCell>{item.unidade}</TableCell>
-                          <TableCell>{item.recebidoPor}</TableCell>
-                          <TableCell>{formatRecebidoEmLabel(item.recebidoEm)}</TableCell>
+                          <TableCell>{item.residentName}</TableCell>
+                          <TableCell>{item.unit}</TableCell>
+                          <TableCell>{item.receivedBy}</TableCell>
+                          <TableCell>{formatReceivedAtLabel(item.receivedAt)}</TableCell>
                           <TableCell>
                             <Chip
                               label={item.status}
@@ -384,7 +430,7 @@ function Recebimentos() {
                                 variant="text"
                                 color="success"
                                 startIcon={<Icon>inventory_2</Icon>}
-                                onClick={() => handleRegistrarRetirada(item.id)}
+                                onClick={() => handleRegisterPickup(item.id)}
                               >
                                 Registrar retirada
                               </MDButton>
@@ -407,7 +453,7 @@ function Recebimentos() {
                         </TableCell>
                       </TableRow>
                     )}
-                    {!loading && filteredRecebimentos.length === 0 && (
+                    {!loading && filteredReceipts.length === 0 && (
                       <TableRow>
                         <TableCell colSpan={6}>
                           <MDBox py={2}>
@@ -421,13 +467,92 @@ function Recebimentos() {
                   </TableBody>
                 </Table>
               </TableContainer>
+              {!loading && filteredReceipts.length > 0 && (
+                <TablePagination
+                  component="div"
+                  count={filteredReceipts.length}
+                  page={page}
+                  onPageChange={handleChangePage}
+                  rowsPerPage={rowsPerPage}
+                  onRowsPerPageChange={handleChangeRowsPerPage}
+                  rowsPerPageOptions={[10, 25, 50]}
+                  labelRowsPerPage="Itens por página"
+                  labelDisplayedRows={({ from, to, count }) =>
+                    `${from}-${to} de ${count !== -1 ? count : `mais de ${to}`}`
+                  }
+                />
+              )}
             </Card>
           </Grid>
         </Grid>
       </MDBox>
       <Footer />
+
+      <Dialog open={isModalOpen} onClose={handleCloseModal} fullWidth maxWidth="sm">
+        <DialogTitle>Novo recebimento</DialogTitle>
+        <DialogContent dividers>
+          <MDBox display="flex" flexDirection="column" gap={2} mt={1} width="100%">
+            <TextField
+              label="Bloco"
+              placeholder="Ex.: Bloco A"
+              value={receiptForm.block}
+              onChange={(event) =>
+                setReceiptForm((prev) => ({ ...prev, block: event.target.value }))
+              }
+              fullWidth
+              autoFocus
+            />
+            <TextField
+              label="Apartamento"
+              placeholder="Ex.: 101"
+              value={receiptForm.apartment}
+              onChange={(event) =>
+                setReceiptForm((prev) => ({ ...prev, apartment: event.target.value }))
+              }
+              fullWidth
+            />
+            <TextField
+              label="Nome do morador"
+              value={receiptForm.recipient}
+              onChange={(event) =>
+                setReceiptForm((prev) => ({ ...prev, recipient: event.target.value }))
+              }
+              fullWidth
+            />
+            <TextField
+              label="Descrição do item"
+              placeholder="Ex.: Pacote pequeno"
+              value={receiptForm.note}
+              onChange={(event) =>
+                setReceiptForm((prev) => ({ ...prev, note: event.target.value }))
+              }
+              fullWidth
+              multiline
+              minRows={3}
+            />
+            {formError && (
+              <MDTypography variant="caption" color="error">
+                {formError}
+              </MDTypography>
+            )}
+          </MDBox>
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <MDButton color="secondary" variant="text" onClick={handleCloseModal}>
+            Cancelar
+          </MDButton>
+          <MDButton
+            color="info"
+            variant="gradient"
+            onClick={handleSaveReceipt}
+            disabled={isSavingReceipt}
+          >
+            {isSavingReceipt ? "Salvando..." : "Salvar"}
+          </MDButton>
+        </DialogActions>
+      </Dialog>
     </DashboardLayout>
   );
 }
 
-export default Recebimentos;
+export default Receipts;

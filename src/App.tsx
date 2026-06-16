@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo, ReactNode } from "react";
-
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 
 import { ThemeProvider } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
 
 import Sidenav from "examples/Sidenav";
+import MDSnackbar from "components/MDSnackbar";
 
 import theme from "assets/theme";
 import themeRTL from "assets/theme/theme-rtl";
@@ -17,19 +17,18 @@ import createCache, { EmotionCache } from "@emotion/cache";
 
 import routes, { AppRoute } from "routes";
 import { useMaterialUIController, setMiniSidenav } from "context";
-import { isTokenValid, clearAuthToken } from "services/auth";
 
-// ─── Proteção de rota ─────────────────────────────────────────────────────────
+import { useUser } from "context/user.context";
 
-function RotaProtegida({ children }: { children: ReactNode }) {
-  if (!isTokenValid()) {
-    clearAuthToken();
+function ProtectedRoute({ children }: { children: ReactNode }) {
+  const { token } = useUser();
+
+  if (!token) {
     return <Navigate to="/entrar" replace />;
   }
+
   return <>{children}</>;
 }
-
-// ─── Geração de <Route> ───────────────────────────────────────────────────────
 
 const getRoutes = (allRoutes: AppRoute[]): ReactNode =>
   allRoutes.flatMap((route) => {
@@ -41,22 +40,25 @@ const getRoutes = (allRoutes: AppRoute[]): ReactNode =>
       const element = route.public ? (
         route.component
       ) : (
-        <RotaProtegida>{route.component}</RotaProtegida>
+        <ProtectedRoute>{route.component}</ProtectedRoute>
       );
+
       return <Route path={route.route} element={element} key={route.key} />;
     }
 
     return [];
   });
 
-// ─── App ──────────────────────────────────────────────────────────────────────
-
 export default function App() {
+  // @ts-ignore
   const [controller, dispatch] = useMaterialUIController();
   const { miniSidenav, direction, layout, sidenavColor, darkMode } = controller;
   const [onMouseEnter, setOnMouseEnter] = useState(false);
+  const [showSessionNotice, setShowSessionNotice] = useState(false);
   const rtlCache = useMemo<EmotionCache>(() => createCache({ key: "rtl" }), []);
   const { pathname } = useLocation();
+
+  const { token } = useUser();
 
   const handleOnMouseEnter = () => {
     if (miniSidenav && !onMouseEnter) {
@@ -81,10 +83,17 @@ export default function App() {
     document.scrollingElement.scrollTop = 0;
   }, [pathname]);
 
+  useEffect(() => {
+    if (token && sessionStorage.getItem("showSessionNotice") === "true") {
+      setShowSessionNotice(true);
+      sessionStorage.removeItem("showSessionNotice");
+    }
+  }, [token]);
+
   const sidebar = layout === "dashboard" && (
     <Sidenav
       color={sidenavColor}
-      brandName="ChegouApp"
+      brandName="ChegouApp!"
       brand={null}
       routes={routes}
       onMouseEnter={handleOnMouseEnter}
@@ -95,20 +104,24 @@ export default function App() {
   const appRoutes = (
     <Routes>
       {getRoutes(routes)}
-      {/* Raiz redireciona para /inicio se autenticado, senão para /entrar */}
       <Route
         path="/"
-        element={
-          isTokenValid() ? (
-            <Navigate to="/inicio" replace />
-          ) : (
-            <Navigate to="/entrar" replace />
-          )
-        }
+        element={token ? <Navigate to="/dashboard" replace /> : <Navigate to="/entrar" replace />}
       />
-      {/* Qualquer rota desconhecida vai para a raiz */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+  );
+
+  const sessionNotice = (
+    <MDSnackbar
+      color="info"
+      icon="schedule"
+      title="Sessão iniciada"
+      dateTime="Agora"
+      content="Seu acesso será válido por 30 minutos. Após esse período, será necessário realizar um novo login."
+      open={showSessionNotice}
+      close={() => setShowSessionNotice(false)}
+    />
   );
 
   if (direction === "rtl") {
@@ -118,6 +131,7 @@ export default function App() {
           <CssBaseline />
           {sidebar}
           {appRoutes}
+          {sessionNotice}
         </ThemeProvider>
       </CacheProvider>
     );
@@ -128,6 +142,7 @@ export default function App() {
       <CssBaseline />
       {sidebar}
       {appRoutes}
+      {sessionNotice}
     </ThemeProvider>
   );
 }

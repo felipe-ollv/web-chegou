@@ -51,8 +51,11 @@ function Condominios() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const data = await api.get("/condominium/find-all");
-        const normalized = (data || []).map((condo) => ({
+        const response = await api.get("/condominium/find-all");
+
+        const listData = response.data || [];
+
+        const normalized = listData.map((condo) => ({
           id: condo.uuid_condominium,
           nome: condo.condominium_name,
           unidades:
@@ -63,6 +66,8 @@ function Condominios() {
           raw: condo,
         }));
         setCondominios(normalized);
+      } catch (error) {
+        console.error("Erro ao buscar condomínios", error);
       } finally {
         setLoading(false);
       }
@@ -74,7 +79,7 @@ function Condominios() {
   const handleSelect = (condominio) => {
     const selected = condominio?.raw || condominio;
     localStorage.setItem("condominioSelecionado", JSON.stringify(selected));
-    navigate("/");
+    navigate("/dashboard");
   };
 
   return (
@@ -89,9 +94,7 @@ function Condominios() {
                   Selecione o condomínio
                 </MDTypography>
                 <MDTypography variant="button" color="text">
-                  Mostre esta tela após o login do síndico quando houver mais de um condomínio na
-                  resposta da API. Ao escolher, salve a seleção (ex.: localStorage ou contexto) e
-                  redirecione para o dashboard.
+                  Lista de condomínios que voce gerência e utilizam o sistema do ChegouApp!
                 </MDTypography>
               </MDBox>
               <Divider />
@@ -110,7 +113,7 @@ function Condominios() {
                               {condominio.nome}
                             </MDTypography>
                             <MDTypography variant="button" color="text" mb={2}>
-                              {condominio.unidades} unidades
+                              260 unidades
                             </MDTypography>
                             <MDBox mt="auto">
                               <MDButton

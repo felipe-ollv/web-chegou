@@ -2,12 +2,13 @@ import { ReactNode } from "react";
 
 import Home from "layouts/home";
 import Condominios from "layouts/condominios";
-import Recebimentos from "layouts/recebimentos";
-import Moradores from "layouts/moradores";
+import Receipts from "layouts/recebimentos";
+import Residents from "layouts/moradores";
 import Avisos from "layouts/avisos";
 import Login from "layouts/login";
 
 import Icon from "@mui/material/Icon";
+import Dashboard from "layouts/dashboard";
 
 export type AppRoute = {
   type?: string;
@@ -17,7 +18,6 @@ export type AppRoute = {
   route?: string;
   component?: ReactNode;
   collapse?: AppRoute[];
-  // Rotas sem este flag ficam protegidas por autenticação
   public?: boolean;
 };
 
@@ -27,20 +27,12 @@ const routes: AppRoute[] = [
     type: "route",
     name: "Login",
     key: "login",
-    route: "/entrar",        // URL pública em português
+    route: "/entrar",
     component: <Login />,
     public: true,
   },
 
   // ─── Rotas protegidas (sidebar) ───────────────────────────────────────────
-  {
-    type: "collapse",
-    name: "Início",
-    key: "home",
-    icon: <Icon fontSize="small">home</Icon>,
-    route: "/inicio",
-    component: <Home />,
-  },
   {
     type: "collapse",
     name: "Condomínios",
@@ -51,11 +43,19 @@ const routes: AppRoute[] = [
   },
   {
     type: "collapse",
+    name: "Dashboard",
+    key: "home",
+    icon: <Icon fontSize="small">home</Icon>,
+    route: "/dashboard",
+    component: <Home />,
+  },
+  {
+    type: "collapse",
     name: "Recebimentos",
     key: "recebimentos",
     icon: <Icon fontSize="small">inventory_2</Icon>,
     route: "/recebimentos",
-    component: <Recebimentos />,
+    component: <Receipts />,
   },
   {
     type: "collapse",
@@ -63,7 +63,7 @@ const routes: AppRoute[] = [
     key: "moradores",
     icon: <Icon fontSize="small">people</Icon>,
     route: "/moradores",
-    component: <Moradores />,
+    component: <Residents />,
   },
   {
     type: "collapse",

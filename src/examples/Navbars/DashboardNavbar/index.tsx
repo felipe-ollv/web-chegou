@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import PropTypes from "prop-types";
 
@@ -10,6 +10,7 @@ import IconButton from "@mui/material/IconButton";
 import Icon from "@mui/material/Icon";
 
 import MDBox from "components/MDBox";
+import MDButton from "components/MDButton";
 
 import Breadcrumbs from "examples/Breadcrumbs";
 
@@ -21,15 +22,18 @@ import {
 } from "examples/Navbars/DashboardNavbar/styles";
 
 import { useMaterialUIController, setTransparentNavbar, setMiniSidenav } from "context";
+import { useUser } from "context/user.context";
 
 function DashboardNavbar({ absolute, light, isMini }) {
   const [navbarType, setNavbarType] = useState();
   const [controller, dispatch] = useMaterialUIController();
   const { miniSidenav, transparentNavbar, fixedNavbar, darkMode } = controller;
+  const { logout } = useUser();
+  const navigate = useNavigate();
   const route = useLocation()
     .pathname.split("/")
     .filter((el) => el !== "");
-  if (!route.length) route.push("inicio");
+  if (!route.length) route.push("dashboard");
 
   useEffect(() => {
     if (fixedNavbar) {
@@ -50,6 +54,10 @@ function DashboardNavbar({ absolute, light, isMini }) {
   }, [dispatch, fixedNavbar]);
 
   const handleMiniSidenav = () => setMiniSidenav(dispatch, !miniSidenav);
+  const handleLogout = () => {
+    logout();
+    navigate("/entrar", { replace: true });
+  };
   const iconsStyle = ({ palette: { dark, white, text }, functions: { rgba } }) => ({
     color: () => {
       let colorValue = light || darkMode ? white.main : dark.main;
@@ -74,7 +82,16 @@ function DashboardNavbar({ absolute, light, isMini }) {
         </MDBox>
         {isMini ? null : (
           <MDBox sx={(theme) => navbarRow(theme, { isMini })}>
-            <MDBox color={light ? "white" : "inherit"}>
+            <MDBox color={light ? "white" : "inherit"} display="flex" alignItems="center" gap={1}>
+              <MDButton
+                variant="text"
+                color={light || darkMode ? "white" : "dark"}
+                size="small"
+                onClick={handleLogout}
+                startIcon={<Icon>logout</Icon>}
+              >
+                Sair
+              </MDButton>
               <IconButton
                 size="small"
                 disableRipple

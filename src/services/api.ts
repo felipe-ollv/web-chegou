@@ -1,50 +1,38 @@
-
 import axios from 'axios';
 import { jwtDecode } from 'jwt-decode';
 
 const api = axios.create({
-  baseURL: 'https://app-chegou.com.br/api/painel',
+    baseURL: 'https://www.app-chegou.com.br/api/painel',
 });
 
 let token: string | null = null;
 let setUserDataGlobal: ((data: any) => void) | undefined;
 
 export const setToken = (newToken: string | null) => {
-  token = newToken;
+    token = newToken;
 };
 
 export const setUserDataSetter = (setter: (data: any) => void) => {
-  setUserDataGlobal = setter;
+    setUserDataGlobal = setter;
 };
 
 api.interceptors.request.use(
-  async (config) => {
-    if (!token) {
-      if (token && setUserDataGlobal) {
-        try {
-          const decoded = jwtDecode(token);
-          setUserDataGlobal(decoded);
-        } catch (e) {
-          console.log("Erro ao decodificar token no intercept", e);
+    async (config) => {
+        const publicPaths = ['/health', '/validate/access'];
+        const isPublic = publicPaths.some(path => config.url?.startsWith(path));
+
+        if (!isPublic && !token) {
+            window.location.replace("/");
+            return Promise.reject("Token ausente");
         }
-      }
-    }
 
-    const publicPaths = ['/validate/access'];
-    const isPublic = publicPaths.some(path => config.url?.startsWith(path));
+        if (!isPublic && token) {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
 
-    if (!isPublic && !token) {
-      // routes.replace("/"); 
-      return Promise.reject("Token ausente");
-    }
-
-    if (!isPublic && token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-
-    return config;
-  },
-  (error) => Promise.reject(error)
+        return config;
+    },
+    (error) => Promise.reject(error)
 );
 
 export default api;

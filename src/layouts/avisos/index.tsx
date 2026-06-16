@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { lighten, useTheme } from "@mui/material/styles";
 
 import Card from "@mui/material/Card";
@@ -46,6 +47,7 @@ const statusColor = {
 const tipoOptions = Object.keys(tipoColor);
 
 function Avisos() {
+  const navigate = useNavigate();
   const theme = useTheme();
   const [avisos, setAvisos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -62,14 +64,14 @@ function Avisos() {
       try {
         const selected = localStorage.getItem("condominioSelecionado");
         const parsed = selected ? JSON.parse(selected) : null;
-        const { condominiumUuid } = getAuthContext();
-        const uuidCondominium = parsed?.uuid_condominium || condominiumUuid;
-        if (!uuidCondominium) {
-          setAvisos([]);
+        const condominiumUuid = parsed?.uuid_condominium;
+        if (!condominiumUuid) {
+          navigate("/condominios");
           return;
         }
-        const data = await api.get(`/note-data/find-note-data/${uuidCondominium}`);
-        const normalized = (data || []).map((item) => {
+        const response = await api.get(`/note-data/find-note-data/${condominiumUuid}`);
+        const list = response.data || [];
+        const normalized = list.map((item) => {
           const url = item.content || "#";
           const fileName = String(url).split("/").pop() || "Documento";
           return {
@@ -104,22 +106,26 @@ function Avisos() {
     if (!formAviso.arquivo) return;
     const selected = localStorage.getItem("condominioSelecionado");
     const parsed = selected ? JSON.parse(selected) : null;
-    const { condominiumUuid } = getAuthContext();
-    const uuidCondominium = parsed?.uuid_condominium || condominiumUuid;
-    if (!uuidCondominium) return;
+    const uuidCondominium = parsed?.uuid_condominium;
+    if (!uuidCondominium) {
+      navigate("/condominios");
+      return;
+    }
 
     const formData = new FormData();
     formData.append("file", formAviso.arquivo);
     formData.append("uuidCondominium", uuidCondominium);
 
     try {
-      await api.post("/note-data/document", {
-        method: "POST",
-        body: formData,
+      await api.post("/note-data/document", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
       });
       setLoading(true);
-      const data = await api.get(`/note-data/find-note-data/${uuidCondominium}`);
-      const normalized = (data || []).map((item) => {
+      const response = await api.get(`/note-data/find-note-data/${uuidCondominium}`);
+      const list = response.data || [];
+      const normalized = list.map((item) => {
         const url = item.content || "#";
         const fileName = String(url).split("/").pop() || "Documento";
         return {
@@ -159,8 +165,8 @@ function Avisos() {
     const nextStatus = aviso.status === "Ativo" ? 1 : 0;
     try {
       await api.post("/note-data/update-read", {
-        method: "POST",
-        body: JSON.stringify({ uuid_note_data: aviso.raw.uuid_note_data, read: nextStatus }),
+        uuid_note_data: aviso.raw.uuid_note_data,
+        read: nextStatus,
       });
       setAvisos((prev) =>
         prev.map((item) =>
