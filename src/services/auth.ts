@@ -6,21 +6,20 @@ type AuthPayload = {
   exp?: number;
 };
 
-const TOKEN_KEY = "chegou:token";
+let authToken: string | null = null;
 
-// ─── Token Storage ────────────────────────────────────────────────────────────
+// ─── Token Memory ─────────────────────────────────────────────────────────────
 
 export const getAuthToken = (): string | null => {
-  return localStorage.getItem(TOKEN_KEY);
+  return authToken;
 };
 
 export const saveAuthToken = (token: string): void => {
-  localStorage.setItem(TOKEN_KEY, token);
+  authToken = token;
 };
 
 export const clearAuthToken = (): void => {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem("condominioSelecionado");
+  authToken = null;
 };
 
 // ─── JWT Decode ───────────────────────────────────────────────────────────────

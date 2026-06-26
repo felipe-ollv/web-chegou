@@ -70,7 +70,6 @@ function Login() {
         successRef.current = true;
 
         if (res.data && res.data.token) {
-          sessionStorage.setItem("showSessionNotice", "true");
           saveTokenAndLogin(res.data.token);
         }
 

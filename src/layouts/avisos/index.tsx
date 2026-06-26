@@ -32,7 +32,7 @@ import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import Footer from "examples/Footer";
 
 import api from "services/api";
-import { getAuthContext } from "services/auth";
+import { useUser } from "context/user.context";
 
 const tipoColor = {
   Comunicado: "info",
@@ -58,13 +58,12 @@ function Avisos() {
     arquivo: null,
   });
   const arquivoInputRef = useRef(null);
+  const { selectedCondominium } = useUser();
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const selected = localStorage.getItem("condominioSelecionado");
-        const parsed = selected ? JSON.parse(selected) : null;
-        const condominiumUuid = parsed?.uuid_condominium;
+        const condominiumUuid = selectedCondominium?.uuid_condominium;
         if (!condominiumUuid) {
           navigate("/condominios");
           return;
@@ -91,7 +90,7 @@ function Avisos() {
     };
 
     fetchData();
-  }, []);
+  }, [navigate, selectedCondominium]);
 
   const handleAddClick = () => {
     setModalAberto(true);
@@ -104,9 +103,7 @@ function Avisos() {
 
   const handleSalvarAviso = async () => {
     if (!formAviso.arquivo) return;
-    const selected = localStorage.getItem("condominioSelecionado");
-    const parsed = selected ? JSON.parse(selected) : null;
-    const uuidCondominium = parsed?.uuid_condominium;
+    const uuidCondominium = selectedCondominium?.uuid_condominium;
     if (!uuidCondominium) {
       navigate("/condominios");
       return;

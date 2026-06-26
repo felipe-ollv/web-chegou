@@ -58,7 +58,7 @@ export default function App() {
   const rtlCache = useMemo<EmotionCache>(() => createCache({ key: "rtl" }), []);
   const { pathname } = useLocation();
 
-  const { token } = useUser();
+  const { token, shouldShowSessionNotice, consumeSessionNotice } = useUser();
 
   const handleOnMouseEnter = () => {
     if (miniSidenav && !onMouseEnter) {
@@ -84,11 +84,11 @@ export default function App() {
   }, [pathname]);
 
   useEffect(() => {
-    if (token && sessionStorage.getItem("showSessionNotice") === "true") {
+    if (token && shouldShowSessionNotice) {
       setShowSessionNotice(true);
-      sessionStorage.removeItem("showSessionNotice");
+      consumeSessionNotice();
     }
-  }, [token]);
+  }, [consumeSessionNotice, shouldShowSessionNotice, token]);
 
   const sidebar = layout === "dashboard" && (
     <Sidenav

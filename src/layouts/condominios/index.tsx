@@ -15,6 +15,7 @@ import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import Footer from "examples/Footer";
 
 import api from "services/api";
+import { useUser } from "context/user.context";
 
 const parseUnitsFromBlocks = (blocksValue) => {
   if (!blocksValue) return 0;
@@ -47,6 +48,7 @@ function Condominios() {
   const [condominios, setCondominios] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const { selectCondominium } = useUser();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -77,8 +79,12 @@ function Condominios() {
   }, []);
 
   const handleSelect = (condominio) => {
-    const selected = condominio?.raw || condominio;
-    localStorage.setItem("condominioSelecionado", JSON.stringify(selected));
+    const selected = {
+      ...(condominio?.raw || condominio),
+      uuid_condominium:
+        condominio?.raw?.uuid_condominium || condominio?.uuid_condominium || condominio?.id,
+    };
+    selectCondominium(selected);
     navigate("/dashboard");
   };
 

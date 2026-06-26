@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { lighten } from "@mui/material/styles";
 import Card from "@mui/material/Card";
@@ -102,7 +103,10 @@ const formatHours = (hours) => {
 };
 
 const normalizePackages = (data) => {
-  const list = [...(data?.deliver || []), ...(data?.pickup || [])];
+  const payload = data?.data || data?.result || data;
+  const deliver = Array.isArray(payload?.deliver) ? payload.deliver : [];
+  const pickup = Array.isArray(payload?.pickup) ? payload.pickup : [];
+  const list = Array.isArray(payload) ? payload : [...deliver, ...pickup];
 
   return list.map((item) => {
     const status = item.status_package === "DELIVERED" ? "Retirado" : "Pendente";
@@ -190,7 +194,6 @@ function Home() {
   const [statusFilter, setStatusFilter] = useState("todos");
   const [blockFilter, setBlockFilter] = useState("todos");
   const [dateFilter, setDateFilter] = useState("");
-
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -436,10 +439,10 @@ function Home() {
                   </MDTypography>
                 </div>
                 <MDBox display="flex" gap={1} flexWrap="wrap">
-                  <MDButton component="a" href="/recebimentos" variant="gradient" color="info">
+                  <MDButton component={Link} to="/recebimentos" variant="gradient" color="info">
                     <Icon sx={{ mr: 1 }}>inventory_2</Icon> Novo recebimento
                   </MDButton>
-                  <MDButton component="a" href="/moradores" variant="outlined" color="info">
+                  <MDButton component={Link} to="/moradores" variant="outlined" color="info">
                     <Icon sx={{ mr: 1 }}>people</Icon> Moradores
                   </MDButton>
                 </MDBox>

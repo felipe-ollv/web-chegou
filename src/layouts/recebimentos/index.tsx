@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { lighten, useTheme } from "@mui/material/styles";
 
@@ -35,17 +35,27 @@ import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import Footer from "examples/Footer";
 
 import api from "services/api";
-import { getAuthContext } from "services/auth";
+import { useUser } from "context/user.context";
 
 const EMPTY_RECEIPT_FORM = {
   block: "",
   apartment: "",
   recipient: "",
   note: "",
+  image: null,
+};
+
+const EMPTY_PICKUP_CONFIRMATION = {
+  receipt: null,
+  code: "",
 };
 
 const normalizeReceipts = (data) => {
-  const all = [...(data?.deliver || []), ...(data?.pickup || [])];
+  const payload = data?.data || data?.result || data;
+  const deliver = Array.isArray(payload?.deliver) ? payload.deliver : [];
+  const pickup = Array.isArray(payload?.pickup) ? payload.pickup : [];
+  const all = Array.isArray(payload) ? payload : [...deliver, ...pickup];
+
   return all.map((item) => ({
     id: item.uuid_package,
     residentName: item.ownerName || "-",
@@ -128,27 +138,38 @@ SummaryCard.propTypes = {
 
 function Receipts() {
   const theme = useTheme();
+  const { userData } = useUser();
   const [receipts, setReceipts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [statusFilter, setStatusFilter] = useState("todos");
   const [blockFilter, setBlockFilter] = useState("todos");
   const [dateFilter, setDateFilter] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [receiptForm, setReceiptForm] = useState(EMPTY_RECEIPT_FORM);
+  const [receiptImagePreview, setReceiptImagePreview] = useState("");
   const [formError, setFormError] = useState("");
   const [isSavingReceipt, setIsSavingReceipt] = useState(false);
+  const [pickupConfirmation, setPickupConfirmation] = useState(EMPTY_PICKUP_CONFIRMATION);
+  const [pickupError, setPickupError] = useState("");
+  const [isConfirmingPickup, setIsConfirmingPickup] = useState(false);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  const receiptImageInputRef = useRef(null);
+  const profileUuid = userData?.ps;
 
   const loadReceipts = async () => {
     setLoading(true);
+    setLoadError("");
     try {
       const { data } = await api.get(
-        `/received-package/find-received-package/9df71478-4a39-42df-9419-f4ebebfd7d66?limit=200`
+        "/received-package/find-received-package/9df71478-4a39-42df-9419-f4ebebfd7d66?limit=200"
       );
       setReceipts(normalizeReceipts(data));
     } catch (error) {
       console.error(error);
+      setReceipts([]);
+      setLoadError("Não foi possível carregar os recebimentos. Tente novamente.");
     } finally {
       setLoading(false);
     }
@@ -216,6 +237,12 @@ function Receipts() {
     setPage(0);
   }, [statusFilter, blockFilter, dateFilter]);
 
+  useEffect(() => {
+    if (!receiptImagePreview) return undefined;
+
+    return () => URL.revokeObjectURL(receiptImagePreview);
+  }, [receiptImagePreview]);
+
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
   };
@@ -228,14 +255,43 @@ function Receipts() {
   const handleRegisterPickup = async (id) => {
     const item = receipts.find((row) => row.id === id);
     if (!item) return;
+
+    setPickupConfirmation({ receipt: item, code: "" });
+    setPickupError("");
+  };
+
+  const handleClosePickupConfirmation = () => {
+    if (isConfirmingPickup) return;
+    setPickupConfirmation(EMPTY_PICKUP_CONFIRMATION);
+    setPickupError("");
+  };
+
+  const handlePickupCodeChange = (event) => {
+    const code = event.target.value.replace(/\D/g, "").slice(0, 6);
+    setPickupConfirmation((prev) => ({ ...prev, code }));
+    setPickupError("");
+  };
+
+  const handleConfirmPickup = async () => {
+    const item = pickupConfirmation.receipt;
+    const confirmationCode = pickupConfirmation.code;
+
+    if (!item) return;
+
+    if (!/^\d{6}$/.test(confirmationCode)) {
+      setPickupError("Digite o código numérico de 6 dígitos.");
+      return;
+    }
+
     try {
+      setIsConfirmingPickup(true);
       await api.put("/received-package/update-received-package", {
         uuid_package: item.uuid_package,
-        confirmation_code: item.confirmation_code,
+        confirmation_code: confirmationCode,
       });
       setReceipts((prev) =>
         prev.map((row) =>
-          row.id === id
+          row.id === item.id
             ? {
                 ...row,
                 status: "Retirado",
@@ -243,8 +299,12 @@ function Receipts() {
             : row
         )
       );
+      handleClosePickupConfirmation();
     } catch (error) {
       console.error(error);
+      setPickupError("Código inválido ou não foi possível registrar a retirada.");
+    } finally {
+      setIsConfirmingPickup(false);
     }
   };
 
@@ -257,11 +317,40 @@ function Receipts() {
     if (isSavingReceipt) return;
     setIsModalOpen(false);
     setReceiptForm(EMPTY_RECEIPT_FORM);
+    setReceiptImagePreview("");
     setFormError("");
+    if (receiptImageInputRef.current) receiptImageInputRef.current.value = "";
+  };
+
+  const handleReceiptImageChange = (event) => {
+    const image = event.target.files?.[0] || null;
+
+    if (!image) {
+      setReceiptForm((prev) => ({ ...prev, image: null }));
+      setReceiptImagePreview("");
+      return;
+    }
+
+    if (!image.type.startsWith("image/")) {
+      setReceiptForm((prev) => ({ ...prev, image: null }));
+      setReceiptImagePreview("");
+      setFormError("Selecione um arquivo de imagem válido.");
+      if (receiptImageInputRef.current) receiptImageInputRef.current.value = "";
+      return;
+    }
+
+    setFormError("");
+    setReceiptForm((prev) => ({ ...prev, image }));
+    setReceiptImagePreview(URL.createObjectURL(image));
+  };
+
+  const handleRemoveReceiptImage = () => {
+    setReceiptForm((prev) => ({ ...prev, image: null }));
+    setReceiptImagePreview("");
+    if (receiptImageInputRef.current) receiptImageInputRef.current.value = "";
   };
 
   const handleSaveReceipt = async () => {
-    const { profileUuid } = getAuthContext();
     const block = receiptForm.block.trim();
     const apartment = receiptForm.apartment.trim();
     const recipient = receiptForm.recipient.trim();
@@ -279,13 +368,29 @@ function Receipts() {
 
     try {
       setIsSavingReceipt(true);
-      await api.post("/received-package/create-received-package", {
-        block,
-        apartment,
-        recipient,
-        note,
-        received: profileUuid,
-      });
+      if (receiptForm.image) {
+        const formData = new FormData();
+        formData.append("block", block);
+        formData.append("apartment", apartment);
+        formData.append("recipient", recipient);
+        formData.append("note", note);
+        formData.append("received", profileUuid);
+        formData.append("file", receiptForm.image);
+
+        await api.post("/received-package/create-received-package", formData, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        });
+      } else {
+        await api.post("/received-package/create-received-package", {
+          block,
+          apartment,
+          recipient,
+          note,
+          received: profileUuid,
+        });
+      }
       handleCloseModal();
       await loadReceipts();
     } catch (error) {
@@ -453,7 +558,21 @@ function Receipts() {
                         </TableCell>
                       </TableRow>
                     )}
-                    {!loading && filteredReceipts.length === 0 && (
+                    {!loading && loadError && (
+                      <TableRow>
+                        <TableCell colSpan={6}>
+                          <MDBox py={2} display="flex" alignItems="center" gap={2}>
+                            <MDTypography variant="button" color="error">
+                              {loadError}
+                            </MDTypography>
+                            <MDButton variant="text" color="info" onClick={loadReceipts}>
+                              Tentar novamente
+                            </MDButton>
+                          </MDBox>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {!loading && !loadError && filteredReceipts.length === 0 && (
                       <TableRow>
                         <TableCell colSpan={6}>
                           <MDBox py={2}>
@@ -530,6 +649,62 @@ function Receipts() {
               multiline
               minRows={3}
             />
+            <MDBox
+              display="flex"
+              alignItems={{ xs: "flex-start", sm: "center" }}
+              gap={2}
+              flexDirection={{ xs: "column", sm: "row" }}
+            >
+              <MDButton
+                variant="outlined"
+                color="info"
+                onClick={() => receiptImageInputRef.current?.click()}
+                startIcon={<Icon>image</Icon>}
+              >
+                Selecionar imagem
+              </MDButton>
+              <MDTypography variant="button" color="text">
+                {receiptForm.image ? receiptForm.image.name : "Nenhuma imagem selecionada"}
+              </MDTypography>
+              <input
+                ref={receiptImageInputRef}
+                type="file"
+                accept="image/*"
+                hidden
+                onChange={handleReceiptImageChange}
+              />
+            </MDBox>
+            {receiptImagePreview && (
+              <MDBox
+                display="flex"
+                alignItems="center"
+                gap={2}
+                p={1}
+                borderRadius="md"
+                border={`1px solid ${theme.palette.divider}`}
+              >
+                <MDBox
+                  component="img"
+                  src={receiptImagePreview}
+                  alt="Imagem do recebimento"
+                  width={88}
+                  height={88}
+                  borderRadius="md"
+                  sx={{ objectFit: "cover" }}
+                />
+                <MDBox flex={1} minWidth={0}>
+                  <MDTypography variant="button" fontWeight="medium">
+                    {receiptForm.image?.name}
+                  </MDTypography>
+                  <MDTypography variant="caption" color="text" display="block">
+                    A imagem será enviada junto ao recebimento.
+                  </MDTypography>
+                </MDBox>
+                <MDButton color="secondary" variant="text" onClick={handleRemoveReceiptImage}>
+                  Remover
+                </MDButton>
+              </MDBox>
+            )}
             {formError && (
               <MDTypography variant="caption" color="error">
                 {formError}
@@ -548,6 +723,61 @@ function Receipts() {
             disabled={isSavingReceipt}
           >
             {isSavingReceipt ? "Salvando..." : "Salvar"}
+          </MDButton>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(pickupConfirmation.receipt)}
+        onClose={handleClosePickupConfirmation}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Confirmar retirada</DialogTitle>
+        <DialogContent dividers>
+          <MDBox display="flex" flexDirection="column" gap={2} mt={1}>
+            <MDBox>
+              <MDTypography variant="button" color="text" display="block">
+                Morador
+              </MDTypography>
+              <MDTypography variant="h6" fontWeight="medium">
+                {pickupConfirmation.receipt?.residentName || "-"}
+              </MDTypography>
+              <MDTypography variant="button" color="text">
+                Unidade {pickupConfirmation.receipt?.unit || "-"}
+              </MDTypography>
+            </MDBox>
+            <TextField
+              label="Código de confirmação"
+              value={pickupConfirmation.code}
+              onChange={handlePickupCodeChange}
+              placeholder="000000"
+              fullWidth
+              autoFocus
+              inputProps={{
+                inputMode: "numeric",
+                pattern: "[0-9]*",
+                maxLength: 6,
+              }}
+            />
+            {pickupError && (
+              <MDTypography variant="caption" color="error">
+                {pickupError}
+              </MDTypography>
+            )}
+          </MDBox>
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <MDButton color="secondary" variant="text" onClick={handleClosePickupConfirmation}>
+            Cancelar
+          </MDButton>
+          <MDButton
+            color="success"
+            variant="gradient"
+            onClick={handleConfirmPickup}
+            disabled={isConfirmingPickup || pickupConfirmation.code.length !== 6}
+          >
+            {isConfirmingPickup ? "Confirmando..." : "Confirmar"}
           </MDButton>
         </DialogActions>
       </Dialog>

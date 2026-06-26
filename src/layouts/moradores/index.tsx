@@ -27,6 +27,7 @@ import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import Footer from "examples/Footer";
 
 import api from "services/api";
+import { useUser } from "context/user.context";
 
 const statusColor = {
   Ativo: "success",
@@ -42,13 +43,12 @@ function Residents() {
   const [blockFilter, setBlockFilter] = useState("todos");
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  const { selectedCondominium } = useUser();
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const selected = localStorage.getItem("condominioSelecionado");
-        const parsed = selected ? JSON.parse(selected) : null;
-        const condominiumUuid = parsed?.uuid_condominium;
+        const condominiumUuid = selectedCondominium?.uuid_condominium;
         if (!condominiumUuid) {
           navigate("/condominios");
           return;
@@ -71,7 +71,7 @@ function Residents() {
     };
 
     fetchData();
-  }, []);
+  }, [navigate, selectedCondominium]);
 
   const blocks = useMemo(
     () => Array.from(new Set(residents.map((resident) => resident.block))).filter(Boolean),
