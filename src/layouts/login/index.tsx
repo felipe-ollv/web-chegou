@@ -5,6 +5,7 @@ import Divider from "@mui/material/Divider";
 import Grid from "@mui/material/Grid";
 import { QRCodeCanvas } from "qrcode.react";
 import MDBox from "components/MDBox";
+import MDSnackbar from "components/MDSnackbar";
 import MDTypography from "components/MDTypography";
 import { useUser } from "context/user.context";
 import { useMaterialUIController, setLayout } from "context";
@@ -14,12 +15,14 @@ import logo from "assets/images/chegou-logo.svg";
 import { RandomCodeGenerating } from "../../utils/random-code-generating";
 import { ExecuteInTime } from "../../utils/execute-in-time";
 import api from "services/api";
+import { consumeAuthNotice } from "services/auth";
 
 function Login() {
   const { saveTokenAndLogin } = useUser();
   const [, dispatch] = useMaterialUIController();
   const navigate = useNavigate();
   const [qrValue, setQrValue] = useState("");
+  const [showSessionExpiredNotice, setShowSessionExpiredNotice] = useState(false);
 
   const attemptsRef = useRef(0);
   const stopIntervalRef = useRef<(() => void) | null>(null);
@@ -33,6 +36,14 @@ function Login() {
 
     return () => setLayout(dispatch, "dashboard");
   }, [dispatch]);
+
+  useEffect(() => {
+    const authNotice = consumeAuthNotice();
+
+    if (authNotice === "session-expired") {
+      setShowSessionExpiredNotice(true);
+    }
+  }, []);
 
   useEffect(() => {
     if (!qrValue) return;
@@ -85,6 +96,7 @@ function Login() {
   }
 
   return (
+      <>
       <MDBox minHeight="100vh" sx={{ backgroundColor: "#0b1327" }}>
         <Grid container sx={{ minHeight: "100vh" }}>
           <Grid item xs={12} md={6}>
@@ -173,6 +185,16 @@ function Login() {
           </Grid>
         </Grid>
       </MDBox>
+      <MDSnackbar
+          color="warning"
+          icon="warning"
+          title="Sessão expirada"
+          dateTime="Agora"
+          content="Seu acesso expirou ou não é mais válido. Faça login novamente para continuar."
+          open={showSessionExpiredNotice}
+          close={() => setShowSessionExpiredNotice(false)}
+      />
+      </>
   );
 }
 

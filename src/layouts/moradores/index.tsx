@@ -3,9 +3,14 @@ import { useNavigate } from "react-router-dom";
 import { lighten, useTheme } from "@mui/material/styles";
 
 import Card from "@mui/material/Card";
+import Dialog from "@mui/material/Dialog";
+import DialogActions from "@mui/material/DialogActions";
+import DialogContent from "@mui/material/DialogContent";
+import DialogTitle from "@mui/material/DialogTitle";
 import Divider from "@mui/material/Divider";
 import FormControl from "@mui/material/FormControl";
 import Grid from "@mui/material/Grid";
+import Icon from "@mui/material/Icon";
 import InputLabel from "@mui/material/InputLabel";
 import MenuItem from "@mui/material/MenuItem";
 import Select from "@mui/material/Select";
@@ -16,11 +21,12 @@ import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TablePagination from "@mui/material/TablePagination";
 import TableRow from "@mui/material/TableRow";
+import TextField from "@mui/material/TextField";
 import Chip from "@mui/material/Chip";
 
 import MDBox from "components/MDBox";
+import MDButton from "components/MDButton";
 import MDTypography from "components/MDTypography";
-// import MDButton from "components/MDButton";
 
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
@@ -34,6 +40,15 @@ const statusColor = {
   Desativado: "warning",
 };
 
+const EMPTY_RESIDENT_FORM = {
+  id: "",
+  name: "",
+  block: "",
+  apartment: "",
+  phone: "",
+  status: "Ativo",
+};
+
 function Residents() {
   const navigate = useNavigate();
   const theme = useTheme();
@@ -43,6 +58,8 @@ function Residents() {
   const [blockFilter, setBlockFilter] = useState("todos");
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [editResident, setEditResident] = useState(EMPTY_RESIDENT_FORM);
+  const [residentToDelete, setResidentToDelete] = useState(null);
   const { selectedCondominium } = useUser();
 
   useEffect(() => {
@@ -59,6 +76,7 @@ function Residents() {
           id: row.uuid_user_profile || `${row.name}-${index}`,
           name: row.name,
           block: row.apartment_block || "-",
+          apartment: row.apartment || "-",
           unit: `${row.apartment_block} - ${row.apartment}`,
           phone: row.phone_number || "-",
           status:
@@ -105,6 +123,36 @@ function Residents() {
   const handleChangeRowsPerPage = (event) => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
+  };
+
+  const handleOpenEditResident = (resident) => {
+    setEditResident({
+      id: resident.id,
+      name: resident.name,
+      block: resident.block === "-" ? "" : resident.block,
+      apartment: resident.apartment === "-" ? "" : resident.apartment,
+      phone: resident.phone === "-" ? "" : resident.phone,
+      status: resident.status,
+    });
+  };
+
+  const handleCloseEditResident = () => {
+    setEditResident(EMPTY_RESIDENT_FORM);
+  };
+
+  const handleEditResidentFieldChange = (field, value) => {
+    setEditResident((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const handleOpenDeleteResident = (resident) => {
+    setResidentToDelete(resident);
+  };
+
+  const handleCloseDeleteResident = () => {
+    setResidentToDelete(null);
   };
 
   return (
@@ -170,6 +218,7 @@ function Residents() {
                       <TableCell>Unidade</TableCell>
                       <TableCell>Telefone</TableCell>
                       <TableCell>Status</TableCell>
+                      <TableCell align="right">Ação</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -198,11 +247,39 @@ function Residents() {
                               }}
                             />
                           </TableCell>
+                          <TableCell align="right">
+                            <MDBox
+                              display="flex"
+                              justifyContent="flex-end"
+                              alignItems="center"
+                              gap={1}
+                              flexWrap="wrap"
+                            >
+                              <MDButton
+                                variant="text"
+                                color="info"
+                                size="small"
+                                startIcon={<Icon>edit</Icon>}
+                                onClick={() => handleOpenEditResident(resident)}
+                              >
+                                Editar
+                              </MDButton>
+                              <MDButton
+                                variant="text"
+                                color="error"
+                                size="small"
+                                startIcon={<Icon>delete</Icon>}
+                                onClick={() => handleOpenDeleteResident(resident)}
+                              >
+                                Excluir
+                              </MDButton>
+                            </MDBox>
+                          </TableCell>
                         </TableRow>
                       ))}
                     {loading && (
                       <TableRow>
-                        <TableCell colSpan={4}>
+                        <TableCell colSpan={5}>
                           <MDBox py={2}>
                             <MDTypography variant="button" color="text">
                               Carregando...
@@ -244,6 +321,103 @@ function Residents() {
         </Grid>
       </MDBox>
       <Footer />
+
+      <Dialog
+        open={Boolean(editResident.id)}
+        onClose={handleCloseEditResident}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Editar morador</DialogTitle>
+        <DialogContent dividers>
+          <MDBox display="flex" flexDirection="column" gap={2} mt={1}>
+            <TextField
+              label="Nome"
+              value={editResident.name}
+              onChange={(event) => handleEditResidentFieldChange("name", event.target.value)}
+              fullWidth
+            />
+            <MDBox display="flex" gap={2} flexDirection={{ xs: "column", sm: "row" }}>
+              <TextField
+                label="Bloco"
+                value={editResident.block}
+                onChange={(event) => handleEditResidentFieldChange("block", event.target.value)}
+                fullWidth
+              />
+              <TextField
+                label="Apartamento"
+                value={editResident.apartment}
+                onChange={(event) =>
+                  handleEditResidentFieldChange("apartment", event.target.value)
+                }
+                fullWidth
+              />
+            </MDBox>
+            <TextField
+              label="Telefone"
+              value={editResident.phone}
+              onChange={(event) => handleEditResidentFieldChange("phone", event.target.value)}
+              fullWidth
+            />
+            <FormControl fullWidth>
+              <InputLabel id="resident-edit-status-label">Status</InputLabel>
+              <Select
+                labelId="resident-edit-status-label"
+                label="Status"
+                value={editResident.status}
+                onChange={(event) => handleEditResidentFieldChange("status", event.target.value)}
+              >
+                <MenuItem value="Ativo">Ativo</MenuItem>
+                <MenuItem value="Desativado">Desativado</MenuItem>
+              </Select>
+            </FormControl>
+            <MDTypography variant="caption" color="text">
+              Layout pronto. A integração com os endpoints de edição será ligada no próximo passo.
+            </MDTypography>
+          </MDBox>
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <MDButton variant="text" color="secondary" onClick={handleCloseEditResident}>
+            Cancelar
+          </MDButton>
+          <MDButton variant="gradient" color="info" onClick={handleCloseEditResident}>
+            Salvar
+          </MDButton>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(residentToDelete)}
+        onClose={handleCloseDeleteResident}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Excluir morador</DialogTitle>
+        <DialogContent dividers>
+          <MDBox mt={1}>
+            <MDTypography variant="button" color="text" display="block" mb={1}>
+              Confirma a exclusão deste morador?
+            </MDTypography>
+            <MDTypography variant="h6" fontWeight="medium">
+              {residentToDelete?.name || "-"}
+            </MDTypography>
+            <MDTypography variant="button" color="text" display="block" mt={1}>
+              Unidade {residentToDelete?.unit || "-"}
+            </MDTypography>
+            <MDTypography variant="caption" color="text" display="block" mt={2}>
+              Layout pronto. A ação de exclusão ainda não está integrada com a API.
+            </MDTypography>
+          </MDBox>
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <MDButton variant="text" color="secondary" onClick={handleCloseDeleteResident}>
+            Cancelar
+          </MDButton>
+          <MDButton variant="gradient" color="error" onClick={handleCloseDeleteResident}>
+            Excluir
+          </MDButton>
+        </DialogActions>
+      </Dialog>
     </DashboardLayout>
   );
 }

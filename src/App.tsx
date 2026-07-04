@@ -19,11 +19,19 @@ import routes, { AppRoute } from "routes";
 import { useMaterialUIController, setMiniSidenav } from "context";
 
 import { useUser } from "context/user.context";
+import { isJwtTokenValid } from "services/auth";
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { token } = useUser();
+  const { token, expireSession } = useUser();
+  const isAuthenticated = isJwtTokenValid(token);
 
-  if (!token) {
+  useEffect(() => {
+    if (token && !isAuthenticated) {
+      expireSession();
+    }
+  }, [expireSession, isAuthenticated, token]);
+
+  if (!isAuthenticated) {
     return <Navigate to="/entrar" replace />;
   }
 
@@ -59,6 +67,7 @@ export default function App() {
   const { pathname } = useLocation();
 
   const { token, shouldShowSessionNotice, consumeSessionNotice } = useUser();
+  const hasValidSession = isJwtTokenValid(token);
 
   const handleOnMouseEnter = () => {
     if (miniSidenav && !onMouseEnter) {
@@ -106,7 +115,9 @@ export default function App() {
       {getRoutes(routes)}
       <Route
         path="/"
-        element={token ? <Navigate to="/dashboard" replace /> : <Navigate to="/entrar" replace />}
+        element={
+          hasValidSession ? <Navigate to="/dashboard" replace /> : <Navigate to="/entrar" replace />
+        }
       />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -1,38 +1,71 @@
-import axios from 'axios';
-import { jwtDecode } from 'jwt-decode';
+import axios from "axios";
+import { isTokenValid } from "./auth";
 
 const api = axios.create({
-    baseURL: 'https://www.app-chegou.com.br/api/painel',
+  baseURL: "https://www.app-chegou.com.br/api/painel",
 });
 
 let token: string | null = null;
 let setUserDataGlobal: ((data: any) => void) | undefined;
+let unauthorizedHandler: (() => void) | undefined;
+
+const publicPaths = ["/health", "/validate/access"];
+
+const isPublicPath = (url?: string) => publicPaths.some((path) => url?.startsWith(path));
+
+const redirectToLogin = () => {
+  if (window.location.pathname !== "/entrar") {
+    window.location.replace("/entrar");
+  }
+};
+
+const handleUnauthorized = () => {
+  unauthorizedHandler?.();
+  redirectToLogin();
+};
 
 export const setToken = (newToken: string | null) => {
-    token = newToken;
+  token = newToken;
 };
 
 export const setUserDataSetter = (setter: (data: any) => void) => {
-    setUserDataGlobal = setter;
+  setUserDataGlobal = setter;
+};
+
+export const setUnauthorizedHandler = (handler?: () => void) => {
+  unauthorizedHandler = handler;
 };
 
 api.interceptors.request.use(
-    async (config) => {
-        const publicPaths = ['/health', '/validate/access'];
-        const isPublic = publicPaths.some(path => config.url?.startsWith(path));
+  async (config) => {
+    const isPublic = isPublicPath(config.url);
 
-        if (!isPublic && !token) {
-            window.location.replace("/");
-            return Promise.reject("Token ausente");
-        }
+    if (!isPublic && (!token || !isTokenValid())) {
+      handleUnauthorized();
+      return Promise.reject(new Error("Token inválido ou expirado"));
+    }
 
-        if (!isPublic && token) {
-            config.headers.Authorization = `Bearer ${token}`;
-        }
+    if (!isPublic && token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
 
-        return config;
-    },
-    (error) => Promise.reject(error)
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error?.response?.status;
+    const isPublic = isPublicPath(error?.config?.url);
+
+    if (!isPublic && (status === 401 || status === 403)) {
+      handleUnauthorized();
+    }
+
+    return Promise.reject(error);
+  }
 );
 
 export default api;

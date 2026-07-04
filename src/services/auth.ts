@@ -7,6 +7,9 @@ type AuthPayload = {
 };
 
 let authToken: string | null = null;
+const AUTH_NOTICE_KEY = "auth_notice";
+
+export type AuthNotice = "session-expired";
 
 // ─── Token Memory ─────────────────────────────────────────────────────────────
 
@@ -20,6 +23,20 @@ export const saveAuthToken = (token: string): void => {
 
 export const clearAuthToken = (): void => {
   authToken = null;
+};
+
+export const saveAuthNotice = (notice: AuthNotice): void => {
+  window.sessionStorage.setItem(AUTH_NOTICE_KEY, notice);
+};
+
+export const consumeAuthNotice = (): AuthNotice | null => {
+  const notice = window.sessionStorage.getItem(AUTH_NOTICE_KEY) as AuthNotice | null;
+
+  if (notice) {
+    window.sessionStorage.removeItem(AUTH_NOTICE_KEY);
+  }
+
+  return notice;
 };
 
 // ─── JWT Decode ───────────────────────────────────────────────────────────────
@@ -56,18 +73,33 @@ export const getAuthContext = (): {
 
 // ─── Validações ───────────────────────────────────────────────────────────────
 
-export const isTokenValid = (): boolean => {
-  const token = getAuthToken();
+export const isJwtTokenValid = (token: string | null | undefined): boolean => {
   if (!token) return false;
+
   const payload = decodeJwt(token);
   if (!payload) return false;
+
   if (payload.exp) {
     const nowInSeconds = Math.floor(Date.now() / 1000);
     if (nowInSeconds >= payload.exp) {
-      clearAuthToken();
       return false;
     }
   }
+
+  return true;
+};
+
+export const isTokenValid = (): boolean => {
+  const token = getAuthToken();
+
+  if (!isJwtTokenValid(token)) {
+    if (token) {
+      clearAuthToken();
+    }
+
+    return false;
+  }
+
   return true;
 };
 
