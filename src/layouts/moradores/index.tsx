@@ -330,20 +330,24 @@ function Residents() {
       >
         <DialogTitle>Editar morador</DialogTitle>
         <DialogContent dividers>
-          <MDBox display="flex" flexDirection="column" gap={2} mt={1}>
-            <TextField
-              label="Nome"
-              value={editResident.name}
-              onChange={(event) => handleEditResidentFieldChange("name", event.target.value)}
-              fullWidth
-            />
-            <MDBox display="flex" gap={2} flexDirection={{ xs: "column", sm: "row" }}>
+          <Grid container spacing={2} mt={0.25}>
+            <Grid item xs={12}>
+              <TextField
+                label="Nome"
+                value={editResident.name}
+                onChange={(event) => handleEditResidentFieldChange("name", event.target.value)}
+                fullWidth
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
               <TextField
                 label="Bloco"
                 value={editResident.block}
                 onChange={(event) => handleEditResidentFieldChange("block", event.target.value)}
                 fullWidth
               />
+            </Grid>
+            <Grid item xs={12} sm={6}>
               <TextField
                 label="Apartamento"
                 value={editResident.apartment}
@@ -352,29 +356,43 @@ function Residents() {
                 }
                 fullWidth
               />
-            </MDBox>
-            <TextField
-              label="Telefone"
-              value={editResident.phone}
-              onChange={(event) => handleEditResidentFieldChange("phone", event.target.value)}
-              fullWidth
-            />
-            <FormControl fullWidth>
-              <InputLabel id="resident-edit-status-label">Status</InputLabel>
-              <Select
-                labelId="resident-edit-status-label"
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                label="Telefone"
+                value={editResident.phone}
+                onChange={(event) => handleEditResidentFieldChange("phone", event.target.value)}
+                fullWidth
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                select
                 label="Status"
                 value={editResident.status}
                 onChange={(event) => handleEditResidentFieldChange("status", event.target.value)}
+                fullWidth
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    minHeight: 54,
+                  },
+                  "& .MuiSelect-select": {
+                    display: "flex",
+                    alignItems: "center",
+                    minHeight: "unset !important",
+                  },
+                }}
               >
                 <MenuItem value="Ativo">Ativo</MenuItem>
                 <MenuItem value="Desativado">Desativado</MenuItem>
-              </Select>
-            </FormControl>
-            <MDTypography variant="caption" color="text">
-              Layout pronto. A integração com os endpoints de edição será ligada no próximo passo.
-            </MDTypography>
-          </MDBox>
+              </TextField>
+            </Grid>
+            <Grid item xs={12}>
+              <MDTypography variant="caption" color="text">
+                Layout pronto. A integração com os endpoints de edição será ligada no próximo passo.
+              </MDTypography>
+            </Grid>
+          </Grid>
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>
           <MDButton variant="text" color="secondary" onClick={handleCloseEditResident}>

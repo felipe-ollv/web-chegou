@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { lighten, useTheme } from "@mui/material/styles";
 
@@ -91,6 +92,22 @@ const formatReceivedAtLabel = (value) => {
   return `${datePart} ${timePart}`;
 };
 
+const compareOptionLabels = (a, b) =>
+  String(a).localeCompare(String(b), "pt-BR", { numeric: true, sensitivity: "base" });
+
+const receiptSelectFieldSx = {
+  "& .MuiOutlinedInput-root": {
+    minHeight: 44,
+  },
+  "& .MuiSelect-select": {
+    minHeight: "unset !important",
+    display: "flex",
+    alignItems: "center",
+    paddingTop: "10px",
+    paddingBottom: "10px",
+  },
+};
+
 function SummaryCard({ label, value, helper, color }) {
   return (
     <Card
@@ -137,10 +154,13 @@ SummaryCard.propTypes = {
 };
 
 function Receipts() {
+  const navigate = useNavigate();
   const theme = useTheme();
-  const { userData } = useUser();
+  const { userData, selectedCondominium } = useUser();
   const [receipts, setReceipts] = useState([]);
+  const [residents, setResidents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [residentsLoading, setResidentsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [statusFilter, setStatusFilter] = useState("todos");
   const [blockFilter, setBlockFilter] = useState("todos");
@@ -158,12 +178,14 @@ function Receipts() {
   const receiptImageInputRef = useRef(null);
   const profileUuid = userData?.ps;
 
-  const loadReceipts = async () => {
+  const loadReceipts = async (condominiumUuid) => {
+    if (!condominiumUuid) return;
+
     setLoading(true);
     setLoadError("");
     try {
       const { data } = await api.get(
-        "/received-package/find-received-package/9df71478-4a39-42df-9419-f4ebebfd7d66?limit=200"
+        `/received-package/find-received-package/${condominiumUuid}?limit=200`
       );
       setReceipts(normalizeReceipts(data));
     } catch (error) {
@@ -176,8 +198,40 @@ function Receipts() {
   };
 
   useEffect(() => {
-    loadReceipts();
-  }, []);
+    const condominiumUuid = selectedCondominium?.uuid_condominium;
+
+    if (!condominiumUuid) {
+      navigate("/condominios");
+      return;
+    }
+
+    const loadData = async () => {
+      setResidentsLoading(true);
+      try {
+        const response = await api.get(`/user-profile/find-residents/${condominiumUuid}`);
+        const list = response.data || [];
+        const normalizedResidents = list
+          .map((resident, index) => ({
+            id: resident.uuid_user_profile || `${resident.name}-${index}`,
+            name: resident.name || "",
+            block: resident.apartment_block || "",
+            apartment: resident.apartment || "",
+          }))
+          .filter((resident) => resident.name && resident.block && resident.apartment);
+
+        setResidents(normalizedResidents);
+      } catch (error) {
+        console.error(error);
+        setResidents([]);
+      } finally {
+        setResidentsLoading(false);
+      }
+
+      await loadReceipts(condominiumUuid);
+    };
+
+    loadData();
+  }, [navigate, selectedCondominium]);
 
   const totals = useMemo(
     () =>
@@ -197,6 +251,34 @@ function Receipts() {
     () => Array.from(new Set(receipts.map((item) => item.block))),
     [receipts]
   );
+
+  const residentBlocks = useMemo(
+    () => Array.from(new Set(residents.map((resident) => resident.block))).sort(compareOptionLabels),
+    [residents]
+  );
+
+  const apartmentsForSelectedBlock = useMemo(() => {
+    if (!receiptForm.block) return [];
+
+    return Array.from(
+      new Set(
+        residents
+          .filter((resident) => resident.block === receiptForm.block)
+          .map((resident) => resident.apartment)
+      )
+    ).sort(compareOptionLabels);
+  }, [receiptForm.block, residents]);
+
+  const residentsForSelectedUnit = useMemo(() => {
+    if (!receiptForm.block || !receiptForm.apartment) return [];
+
+    return residents
+      .filter(
+        (resident) =>
+          resident.block === receiptForm.block && resident.apartment === receiptForm.apartment
+      )
+      .sort((left, right) => compareOptionLabels(left.name, right.name));
+  }, [receiptForm.apartment, receiptForm.block, residents]);
 
   const filteredReceipts = useMemo(() => {
     const selectedDate = dateFilter ? new Date(dateFilter) : null;
@@ -350,6 +432,36 @@ function Receipts() {
     if (receiptImageInputRef.current) receiptImageInputRef.current.value = "";
   };
 
+  const handleReceiptBlockChange = (event) => {
+    const nextBlock = event.target.value;
+    setReceiptForm((prev) => ({
+      ...prev,
+      block: nextBlock,
+      apartment: "",
+      recipient: "",
+    }));
+    setFormError("");
+  };
+
+  const handleReceiptApartmentChange = (event) => {
+    const nextApartment = event.target.value;
+    setReceiptForm((prev) => ({
+      ...prev,
+      apartment: nextApartment,
+      recipient: "",
+    }));
+    setFormError("");
+  };
+
+  const handleReceiptRecipientChange = (event) => {
+    const nextRecipient = event.target.value;
+    setReceiptForm((prev) => ({
+      ...prev,
+      recipient: nextRecipient,
+    }));
+    setFormError("");
+  };
+
   const handleSaveReceipt = async () => {
     const block = receiptForm.block.trim();
     const apartment = receiptForm.apartment.trim();
@@ -368,6 +480,7 @@ function Receipts() {
 
     try {
       setIsSavingReceipt(true);
+      const condominiumUuid = selectedCondominium?.uuid_condominium;
       if (receiptForm.image) {
         const formData = new FormData();
         formData.append("block", block);
@@ -392,7 +505,7 @@ function Receipts() {
         });
       }
       handleCloseModal();
-      await loadReceipts();
+      await loadReceipts(condominiumUuid);
     } catch (error) {
       console.error(error);
       setFormError("Não foi possível registrar o recebimento. Tente novamente.");
@@ -565,7 +678,11 @@ function Receipts() {
                             <MDTypography variant="button" color="error">
                               {loadError}
                             </MDTypography>
-                            <MDButton variant="text" color="info" onClick={loadReceipts}>
+                            <MDButton
+                              variant="text"
+                              color="info"
+                              onClick={() => loadReceipts(selectedCondominium?.uuid_condominium)}
+                            >
                               Tentar novamente
                             </MDButton>
                           </MDBox>
@@ -612,32 +729,81 @@ function Receipts() {
         <DialogContent dividers>
           <MDBox display="flex" flexDirection="column" gap={2} mt={1} width="100%">
             <TextField
+              select
               label="Bloco"
-              placeholder="Ex.: Bloco A"
               value={receiptForm.block}
-              onChange={(event) =>
-                setReceiptForm((prev) => ({ ...prev, block: event.target.value }))
-              }
+              onChange={handleReceiptBlockChange}
               fullWidth
               autoFocus
-            />
+              disabled={residentsLoading || residentBlocks.length === 0}
+              sx={receiptSelectFieldSx}
+            >
+              {residentsLoading ? (
+                <MenuItem value="" disabled>
+                  Carregando blocos...
+                </MenuItem>
+              ) : residentBlocks.length > 0 ? (
+                residentBlocks.map((block) => (
+                  <MenuItem key={block} value={block}>
+                    {block}
+                  </MenuItem>
+                ))
+              ) : (
+                <MenuItem value="" disabled>
+                  Nenhum bloco disponível
+                </MenuItem>
+              )}
+            </TextField>
             <TextField
+              select
               label="Apartamento"
-              placeholder="Ex.: 101"
               value={receiptForm.apartment}
-              onChange={(event) =>
-                setReceiptForm((prev) => ({ ...prev, apartment: event.target.value }))
-              }
+              onChange={handleReceiptApartmentChange}
               fullWidth
-            />
+              disabled={!receiptForm.block || apartmentsForSelectedBlock.length === 0}
+              sx={receiptSelectFieldSx}
+            >
+              {!receiptForm.block ? (
+                <MenuItem value="" disabled>
+                  Selecione um bloco primeiro
+                </MenuItem>
+              ) : apartmentsForSelectedBlock.length > 0 ? (
+                apartmentsForSelectedBlock.map((apartment) => (
+                  <MenuItem key={apartment} value={apartment}>
+                    {apartment}
+                  </MenuItem>
+                ))
+              ) : (
+                <MenuItem value="" disabled>
+                  Nenhum apartamento disponível
+                </MenuItem>
+              )}
+            </TextField>
             <TextField
+              select
               label="Nome do morador"
               value={receiptForm.recipient}
-              onChange={(event) =>
-                setReceiptForm((prev) => ({ ...prev, recipient: event.target.value }))
-              }
+              onChange={handleReceiptRecipientChange}
               fullWidth
-            />
+              disabled={!receiptForm.apartment || residentsForSelectedUnit.length === 0}
+              sx={receiptSelectFieldSx}
+            >
+              {!receiptForm.apartment ? (
+                <MenuItem value="" disabled>
+                  Selecione um apartamento primeiro
+                </MenuItem>
+              ) : residentsForSelectedUnit.length > 0 ? (
+                residentsForSelectedUnit.map((resident) => (
+                  <MenuItem key={resident.id} value={resident.name}>
+                    {resident.name}
+                  </MenuItem>
+                ))
+              ) : (
+                <MenuItem value="" disabled>
+                  Nenhum morador disponível
+                </MenuItem>
+              )}
+            </TextField>
             <TextField
               label="Descrição do item"
               placeholder="Ex.: Pacote pequeno"
