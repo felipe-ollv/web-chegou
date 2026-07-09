@@ -80,9 +80,9 @@ function Condominios() {
 
   const handleSelect = (condominio) => {
     const selected = {
-      ...(condominio?.raw || condominio),
       uuid_condominium:
         condominio?.raw?.uuid_condominium || condominio?.uuid_condominium || condominio?.id,
+      condominium_name: condominio?.raw?.condominium_name || condominio?.nome || "",
     };
     selectCondominium(selected);
     navigate("/dashboard");

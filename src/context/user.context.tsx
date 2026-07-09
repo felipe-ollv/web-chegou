@@ -1,10 +1,9 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect, useRef } from "react";
 import {
   setUnauthorizedHandler,
-  setUserDataSetter,
   setToken as setApiToken,
 } from "../services/api";
-import { clearAuthToken, decodeJwt, saveAuthNotice, saveAuthToken } from "../services/auth";
+import { clearAuthToken, decodeJwt, saveAuthToken } from "../services/auth";
 
 type UserContextType = {
     userData: any | null;
@@ -21,6 +20,7 @@ type UserContextType = {
 };
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
+const LEGACY_CONDOMINIUM_STORAGE_KEYS = ["condominioSelecionado"];
 
 export const UserProvider = ({ children }: { children: ReactNode }) => {
   const [userData, setUserData] = useState<any | null>(null);
@@ -46,16 +46,16 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     setShouldShowSessionNotice(false);
   };
 
-  const redirectToLogin = () => {
-    if (window.location.pathname !== "/entrar") {
-      window.location.replace("/entrar");
+  const redirectToLogin = (reason?: string) => {
+    const target = reason ? `/entrar?reason=${encodeURIComponent(reason)}` : "/entrar";
+    if (`${window.location.pathname}${window.location.search}` !== target) {
+      window.location.replace(target);
     }
   };
 
   const expireSession = () => {
-    saveAuthNotice("session-expired");
     resetSessionState();
-    redirectToLogin();
+    redirectToLogin("session-expired");
   };
 
   const scheduleSessionExpiration = (newToken: string) => {
@@ -81,9 +81,12 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
-    setUserDataSetter(setUserData);
+    LEGACY_CONDOMINIUM_STORAGE_KEYS.forEach((key) => {
+      window.localStorage.removeItem(key);
+      window.sessionStorage.removeItem(key);
+    });
+
     setUnauthorizedHandler(() => {
-      saveAuthNotice("session-expired");
       resetSessionState();
     });
 
@@ -116,7 +119,14 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const selectCondominium = (condominium: any) => {
-    setSelectedCondominium(condominium);
+    setSelectedCondominium(
+      condominium
+        ? {
+            uuid_condominium: condominium.uuid_condominium,
+            condominium_name: condominium.condominium_name,
+          }
+        : null
+    );
   };
 
   const consumeSessionNotice = () => {

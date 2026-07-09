@@ -41,10 +41,26 @@ const tipoColor = {
 };
 const statusColor = {
   Ativo: "success",
-  Finalizado: "grey",
+  Desativado: "grey",
 };
 
 const tipoOptions = Object.keys(tipoColor);
+
+const normalizeAvisos = (list = []) =>
+  list.map((item) => {
+    const url = item.content || "#";
+    const fileName = String(url).split("/").pop() || "Documento";
+
+    return {
+      id: item.uuid_note_data || fileName,
+      titulo: fileName.replace(/[-_]/g, " "),
+      data: item.created_at ? String(item.created_at).slice(0, 10) : "-",
+      tipo: "Comunicado",
+      status: Number(item.deleted || 0) === 1 ? "Desativado" : "Ativo",
+      url,
+      raw: item,
+    };
+  });
 
 function Avisos() {
   const navigate = useNavigate();
@@ -52,6 +68,8 @@ function Avisos() {
   const [avisos, setAvisos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalAberto, setModalAberto] = useState(false);
+  const [modalDesativacaoAberto, setModalDesativacaoAberto] = useState(false);
+  const [avisoPendenteDesativacao, setAvisoPendenteDesativacao] = useState(null);
   const [formAviso, setFormAviso] = useState({
     titulo: "",
     tipo: "Comunicado",
@@ -69,21 +87,7 @@ function Avisos() {
           return;
         }
         const response = await api.get(`/note-data/find-note-data/${condominiumUuid}`);
-        const list = response.data || [];
-        const normalized = list.map((item) => {
-          const url = item.content || "#";
-          const fileName = String(url).split("/").pop() || "Documento";
-          return {
-            id: item.uuid_note_data || fileName,
-            titulo: fileName.replace(/[-_]/g, " "),
-            data: item.created_at ? String(item.created_at).slice(0, 10) : "-",
-            tipo: "Comunicado",
-            status: Number(item.read || 0) === 1 ? "Finalizado" : "Ativo",
-            url,
-            raw: item,
-          };
-        });
-        setAvisos(normalized);
+        setAvisos(normalizeAvisos(response.data || []));
       } finally {
         setLoading(false);
       }
@@ -121,21 +125,7 @@ function Avisos() {
       });
       setLoading(true);
       const response = await api.get(`/note-data/find-note-data/${uuidCondominium}`);
-      const list = response.data || [];
-      const normalized = list.map((item) => {
-        const url = item.content || "#";
-        const fileName = String(url).split("/").pop() || "Documento";
-        return {
-          id: item.uuid_note_data || fileName,
-          titulo: fileName.replace(/[-_]/g, " "),
-          data: item.created_at ? String(item.created_at).slice(0, 10) : "-",
-          tipo: "Comunicado",
-          status: Number(item.read || 0) === 1 ? "Finalizado" : "Ativo",
-          url,
-          raw: item,
-        };
-      });
-      setAvisos(normalized);
+      setAvisos(normalizeAvisos(response.data || []));
       handleModalClose();
     } catch (error) {
       console.error(error);
@@ -144,37 +134,35 @@ function Avisos() {
     }
   };
 
-  const handleToggleStatus = async (id) => {
+  const handleOpenDeactivateModal = (id) => {
     const aviso = avisos.find((item) => item.id === id);
-    if (!aviso?.raw?.uuid_note_data) {
-      setAvisos((prev) =>
-        prev.map((item) =>
-          item.id === id
-            ? {
-                ...item,
-                status: item.status === "Ativo" ? "Finalizado" : "Ativo",
-              }
-            : item
-        )
-      );
+    if (!aviso) return;
+    setAvisoPendenteDesativacao(aviso);
+    setModalDesativacaoAberto(true);
+  };
+
+  const handleCloseDeactivateModal = () => {
+    setModalDesativacaoAberto(false);
+    setAvisoPendenteDesativacao(null);
+  };
+
+  const handleDeactivate = async () => {
+    const aviso = avisoPendenteDesativacao;
+    if (!aviso) return;
+
+    if (!aviso.raw?.uuid_note_data) {
+      setAvisos((prev) => prev.filter((item) => item.id !== aviso.id));
+      handleCloseDeactivateModal();
       return;
     }
-    const nextStatus = aviso.status === "Ativo" ? 1 : 0;
+
     try {
-      await api.post("/note-data/update-read", {
+      await api.post("/note-data/update-status", {
         uuid_note_data: aviso.raw.uuid_note_data,
-        read: nextStatus,
+        deleted: 1,
       });
-      setAvisos((prev) =>
-        prev.map((item) =>
-          item.id === id
-            ? {
-                ...item,
-                status: item.status === "Ativo" ? "Finalizado" : "Ativo",
-              }
-            : item
-        )
-      );
+      setAvisos((prev) => prev.filter((item) => item.id !== aviso.id));
+      handleCloseDeactivateModal();
     } catch (error) {
       console.error(error);
     }
@@ -257,11 +245,11 @@ function Avisos() {
                             <MDBox display="flex" alignItems="center" gap={1}>
                               <MDButton
                                 variant="text"
-                                color={aviso.status === "Ativo" ? "warning" : "success"}
+                                color="warning"
                                 startIcon={<Icon>toggle_on</Icon>}
-                                onClick={() => handleToggleStatus(aviso.id)}
+                                onClick={() => handleOpenDeactivateModal(aviso.id)}
                               >
-                                {aviso.status === "Ativo" ? "Desativar" : "Ativar"}
+                                Desativar
                               </MDButton>
                               <MDButton
                                 component="a"
@@ -371,6 +359,35 @@ function Avisos() {
           </MDButton>
           <MDButton color="info" variant="gradient" onClick={handleSalvarAviso}>
             Salvar
+          </MDButton>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={modalDesativacaoAberto}
+        onClose={handleCloseDeactivateModal}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Desativar comunicado</DialogTitle>
+        <DialogContent dividers>
+          <MDBox mt={1}>
+            <MDTypography variant="button" color="text">
+              Ao desativar este comunicado, ele não irá mais aparecer no app para os moradores.
+            </MDTypography>
+            {avisoPendenteDesativacao?.titulo && (
+              <MDTypography variant="h6" fontWeight="medium" mt={2}>
+                {avisoPendenteDesativacao.titulo}
+              </MDTypography>
+            )}
+          </MDBox>
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <MDButton color="secondary" variant="text" onClick={handleCloseDeactivateModal}>
+            Cancelar
+          </MDButton>
+          <MDButton color="warning" variant="gradient" onClick={handleDeactivate}>
+            Desativar
           </MDButton>
         </DialogActions>
       </Dialog>

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 import { lighten } from "@mui/material/styles";
 import Card from "@mui/material/Card";
@@ -39,6 +40,7 @@ import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import Footer from "examples/Footer";
 import api from "services/api";
+import { useUser } from "context/user.context";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
 
@@ -189,27 +191,39 @@ SectionHeader.propTypes = {
 };
 
 function Home() {
+  const navigate = useNavigate();
+  const { selectedCondominium } = useUser();
   const [packages, setPackages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("todos");
   const [blockFilter, setBlockFilter] = useState("todos");
   const [dateFilter, setDateFilter] = useState("");
+
   useEffect(() => {
+    const condominiumUuid = selectedCondominium?.uuid_condominium;
+
+    if (!condominiumUuid) {
+      navigate("/condominios");
+      return;
+    }
+
     const fetchData = async () => {
+      setLoading(true);
       try {
         const { data } = await api.get(
-          "/received-package/find-received-package/9df71478-4a39-42df-9419-f4ebebfd7d66?limit=200"
+          `/received-package/find-received-package/${condominiumUuid}?limit=200`
         );
         setPackages(normalizePackages(data));
       } catch (error) {
         console.error(error);
+        setPackages([]);
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, []);
+  }, [navigate, selectedCondominium]);
 
   const blocks = useMemo(
     () => Array.from(new Set(packages.map((item) => item.block))).filter(Boolean),

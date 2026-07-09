@@ -9,18 +9,18 @@ import MDSnackbar from "components/MDSnackbar";
 import MDTypography from "components/MDTypography";
 import { useUser } from "context/user.context";
 import { useMaterialUIController, setLayout } from "context";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import logo from "assets/images/chegou-logo.svg";
 import { RandomCodeGenerating } from "../../utils/random-code-generating";
 import { ExecuteInTime } from "../../utils/execute-in-time";
 import api from "services/api";
-import { consumeAuthNotice } from "services/auth";
 
 function Login() {
   const { saveTokenAndLogin } = useUser();
   const [, dispatch] = useMaterialUIController();
   const navigate = useNavigate();
+  const location = useLocation();
   const [qrValue, setQrValue] = useState("");
   const [showSessionExpiredNotice, setShowSessionExpiredNotice] = useState(false);
 
@@ -38,12 +38,14 @@ function Login() {
   }, [dispatch]);
 
   useEffect(() => {
-    const authNotice = consumeAuthNotice();
+    const searchParams = new URLSearchParams(location.search);
+    const reason = searchParams.get("reason");
 
-    if (authNotice === "session-expired") {
+    if (reason === "session-expired") {
       setShowSessionExpiredNotice(true);
+      navigate("/entrar", { replace: true });
     }
-  }, []);
+  }, [location.search, navigate]);
 
   useEffect(() => {
     if (!qrValue) return;

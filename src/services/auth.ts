@@ -1,5 +1,4 @@
 type AuthPayload = {
-  phone?: string;
   ps?: string;
   cs?: string;
   ts?: string;
@@ -7,9 +6,6 @@ type AuthPayload = {
 };
 
 let authToken: string | null = null;
-const AUTH_NOTICE_KEY = "auth_notice";
-
-export type AuthNotice = "session-expired";
 
 // ─── Token Memory ─────────────────────────────────────────────────────────────
 
@@ -23,20 +19,6 @@ export const saveAuthToken = (token: string): void => {
 
 export const clearAuthToken = (): void => {
   authToken = null;
-};
-
-export const saveAuthNotice = (notice: AuthNotice): void => {
-  window.sessionStorage.setItem(AUTH_NOTICE_KEY, notice);
-};
-
-export const consumeAuthNotice = (): AuthNotice | null => {
-  const notice = window.sessionStorage.getItem(AUTH_NOTICE_KEY) as AuthNotice | null;
-
-  if (notice) {
-    window.sessionStorage.removeItem(AUTH_NOTICE_KEY);
-  }
-
-  return notice;
 };
 
 // ─── JWT Decode ───────────────────────────────────────────────────────────────

@@ -6,30 +6,26 @@ const api = axios.create({
 });
 
 let token: string | null = null;
-let setUserDataGlobal: ((data: any) => void) | undefined;
 let unauthorizedHandler: (() => void) | undefined;
 
 const publicPaths = ["/health", "/validate/access"];
 
 const isPublicPath = (url?: string) => publicPaths.some((path) => url?.startsWith(path));
 
-const redirectToLogin = () => {
-  if (window.location.pathname !== "/entrar") {
-    window.location.replace("/entrar");
+const redirectToLogin = (reason?: string) => {
+  const target = reason ? `/entrar?reason=${encodeURIComponent(reason)}` : "/entrar";
+  if (`${window.location.pathname}${window.location.search}` !== target) {
+    window.location.replace(target);
   }
 };
 
 const handleUnauthorized = () => {
   unauthorizedHandler?.();
-  redirectToLogin();
+  redirectToLogin("session-expired");
 };
 
 export const setToken = (newToken: string | null) => {
   token = newToken;
-};
-
-export const setUserDataSetter = (setter: (data: any) => void) => {
-  setUserDataGlobal = setter;
 };
 
 export const setUnauthorizedHandler = (handler?: () => void) => {
