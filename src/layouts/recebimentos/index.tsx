@@ -51,6 +51,20 @@ const EMPTY_PICKUP_CONFIRMATION = {
   code: "",
 };
 
+const getReceiptImageUrl = (value) => {
+  if (!value || typeof value !== "string") return null;
+  const base = api.defaults.baseURL.replace(/\/painel(?=\/|$)/g, "").replace(/\/$/, "");
+  if (/^https?:\/\//i.test(value)) {
+    const url = new URL(value);
+    url.pathname = url.pathname.replace(/\/painel(?=\/|$)/g, "");
+    return url.href;
+  }
+  if (value.startsWith("/")) {
+    return new URL(value.replace(/\/painel(?=\/|$)/g, ""), base).href;
+  }
+  return `${base}/received-package/uploads/${encodeURIComponent(value.split("/").pop())}`;
+};
+
 const normalizeReceipts = (data) => {
   const payload = data?.data || data?.result || data;
   const deliver = Array.isArray(payload?.deliver) ? payload.deliver : [];
@@ -63,6 +77,7 @@ const normalizeReceipts = (data) => {
     unit: `${item.blockOwner || "-"} - ${item.apartmentOwner || "-"}`,
     block: item.blockOwner || "-",
     note: item.note || "-",
+    image: getReceiptImageUrl(item.image_url || item.package_image),
     receivedBy: item.receiverName || "-",
     receivedAt: item.created_at,
     status: item.status_package === "DELIVERED" ? "Retirado" : "Pendente",
@@ -157,6 +172,8 @@ function Receipts() {
   const navigate = useNavigate();
   const theme = useTheme();
   const { userData, selectedCondominium } = useUser();
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [imageFailed, setImageFailed] = useState(false);
   const [receipts, setReceipts] = useState([]);
   const [residents, setResidents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -612,6 +629,7 @@ function Receipts() {
                 <Table>
                   <TableHead>
                     <TableRow>
+                      <TableCell>Imagem</TableCell>
                       <TableCell>Morador</TableCell>
                       <TableCell>Unidade</TableCell>
                       <TableCell>Recebido por</TableCell>
@@ -624,6 +642,17 @@ function Receipts() {
                     {!loading &&
                       paginatedReceipts.map((item) => (
                         <TableRow key={item.id}>
+                          <TableCell>
+                            {item.image ? (
+                              <MDButton size="small" onClick={() => {
+                                setImageFailed(false);
+                                setSelectedImage(item);
+                              }} aria-label={`Ver imagem do recebimento de ${item.residentName}`}>
+                                <img src={item.image} alt="Ver imagem" loading="lazy"
+                                  style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 8 }} />
+                              </MDButton>
+                            ) : "Sem imagem"}
+                          </TableCell>
                           <TableCell>{item.residentName}</TableCell>
                           <TableCell>{item.unit}</TableCell>
                           <TableCell>{item.receivedBy}</TableCell>
@@ -662,7 +691,7 @@ function Receipts() {
                       ))}
                     {loading && (
                       <TableRow>
-                        <TableCell colSpan={6}>
+                        <TableCell colSpan={7}>
                           <MDBox py={2}>
                             <MDTypography variant="button" color="text">
                               Carregando...
@@ -673,7 +702,7 @@ function Receipts() {
                     )}
                     {!loading && loadError && (
                       <TableRow>
-                        <TableCell colSpan={6}>
+                        <TableCell colSpan={7}>
                           <MDBox py={2} display="flex" alignItems="center" gap={2}>
                             <MDTypography variant="button" color="error">
                               {loadError}
@@ -691,7 +720,7 @@ function Receipts() {
                     )}
                     {!loading && !loadError && filteredReceipts.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={6}>
+                        <TableCell colSpan={7}>
                           <MDBox py={2}>
                             <MDTypography variant="button" color="text">
                               Nenhum recebimento encontrado para os filtros selecionados.
@@ -723,6 +752,20 @@ function Receipts() {
         </Grid>
       </MDBox>
       <Footer />
+
+      <Dialog open={Boolean(selectedImage)} onClose={() => setSelectedImage(null)} fullWidth maxWidth="md">
+        <DialogTitle>Imagem do recebimento — {selectedImage?.residentName}</DialogTitle>
+        <DialogContent dividers>
+          {imageFailed ? (
+            <MDTypography color="error">Não foi possível carregar a imagem.</MDTypography>
+          ) : selectedImage && (
+            <img src={selectedImage.image} alt={`Recebimento de ${selectedImage.residentName}`}
+              onError={() => setImageFailed(true)}
+              style={{ display: "block", width: "100%", maxHeight: "70vh", objectFit: "contain" }} />
+          )}
+        </DialogContent>
+        <DialogActions><MDButton onClick={() => setSelectedImage(null)}>Fechar</MDButton></DialogActions>
+      </Dialog>
 
       <Dialog open={isModalOpen} onClose={handleCloseModal} fullWidth maxWidth="sm">
         <DialogTitle>Novo recebimento</DialogTitle>
