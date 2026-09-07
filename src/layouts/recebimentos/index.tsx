@@ -54,16 +54,13 @@ const EMPTY_PICKUP_CONFIRMATION = {
 
 const getReceiptImageUrl = (value) => {
   if (!value || typeof value !== "string") return null;
-  const base = api.defaults.baseURL.replace(/\/painel(?=\/|$)/g, "").replace(/\/$/, "");
-  if (/^https?:\/\//i.test(value)) {
-    const url = new URL(value);
-    url.pathname = url.pathname.replace(/\/painel(?=\/|$)/g, "");
-    return url.href;
-  }
-  if (value.startsWith("/")) {
-    return new URL(value.replace(/\/painel(?=\/|$)/g, ""), base).href;
-  }
-  return `${base}/received-package/uploads/${encodeURIComponent(value.split("/").pop())}`;
+  const webBase = api.defaults.baseURL.replace(/\/$/, "");
+  if (/^https?:\/\//i.test(value)) return value;
+  if (value.startsWith("/")) return new URL(value, webBase).href;
+  const filename = value.split("/").pop();
+  const isWebUpload = /^package-[0-9a-f]{8}-[0-9a-f-]{27}\./i.test(filename);
+  const base = isWebUpload ? webBase : webBase.replace(/\/painel(?=\/|$)/g, "");
+  return `${base}/received-package/uploads/${encodeURIComponent(filename)}`;
 };
 
 const normalizeReceipts = (data) => {
