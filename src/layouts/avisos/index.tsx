@@ -97,6 +97,7 @@ function Avisos() {
   const [avisoPendenteDesativacao, setAvisoPendenteDesativacao] = useState(null);
   const [formAviso, setFormAviso] = useState({
     titulo: "",
+    descricao: "",
     tipo: "Comunicado",
     arquivo: null,
   });
@@ -127,7 +128,7 @@ function Avisos() {
 
   const handleModalClose = () => {
     setModalAberto(false);
-    setFormAviso({ titulo: "", tipo: "Comunicado", arquivo: null });
+    setFormAviso({ titulo: "", descricao: "", tipo: "Comunicado", arquivo: null });
   };
 
   const handleSalvarAviso = async () => {
@@ -142,6 +143,7 @@ function Avisos() {
     formData.append("file", formAviso.arquivo);
     formData.append("uuidCondominium", uuidCondominium);
     formData.append("category", formAviso.tipo);
+    formData.append("description", formAviso.descricao.trim());
 
     try {
       await api.post("/note-data/document", formData, {
@@ -336,6 +338,14 @@ function Avisos() {
               onChange={(e) => setFormAviso((prev) => ({ ...prev, titulo: e.target.value }))}
               fullWidth
               autoFocus
+            />
+            <TextField
+              label="Descrição / Anotação"
+              value={formAviso.descricao}
+              onChange={(e) => setFormAviso((prev) => ({ ...prev, descricao: e.target.value }))}
+              multiline
+              minRows={3}
+              fullWidth
             />
             <FormControl
               fullWidth

@@ -194,6 +194,19 @@ function Home() {
   const navigate = useNavigate();
   const { selectedCondominium } = useUser();
   const [packages, setPackages] = useState([]);
+  const [reminders, setReminders] = useState({});
+  const sendReminder = async (id) => {
+    setReminders((prev) => ({ ...prev, [id]: { sending: true } }));
+    try {
+      await api.post(`/received-package/${encodeURIComponent(id)}/reminder`);
+      setReminders((prev) => ({ ...prev, [id]: { sent: true } }));
+    } catch (error) {
+      setReminders((prev) => ({
+        ...prev,
+        [id]: { error: error.response?.data?.message || "Não foi possível enviar o lembrete." },
+      }));
+    }
+  };
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("todos");
   const [blockFilter, setBlockFilter] = useState("todos");
@@ -629,6 +642,7 @@ function Home() {
                       <TableCell>Morador</TableCell>
                       <TableCell>Unidade</TableCell>
                       <TableCell>Tempo</TableCell>
+                      <TableCell>Lembrete</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -639,16 +653,32 @@ function Home() {
                         <TableCell>
                           <Chip label={formatHours(getElapsedHours(item.receivedAt))} color="error" size="small" />
                         </TableCell>
+                        <TableCell>
+                          <MDButton
+                            size="small"
+                            color="info"
+                            disabled={Boolean(reminders[item.id]?.sending || reminders[item.id]?.sent)}
+                            onClick={() => sendReminder(item.id)}
+                            aria-label={`Enviar lembrete para ${item.residentName}`}
+                          >
+                            {reminders[item.id]?.sending ? "Enviando..." : reminders[item.id]?.sent ? "Enviado" : "Enviar lembrete"}
+                          </MDButton>
+                          {reminders[item.id]?.error && (
+                            <MDTypography variant="caption" color="error" display="block" role="alert">
+                              {reminders[item.id].error}
+                            </MDTypography>
+                          )}
+                        </TableCell>
                       </TableRow>
                     ))}
                     {!loading && criticalPendingPackages.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={3}>Nenhuma pendência crítica no filtro atual.</TableCell>
+                        <TableCell colSpan={4}>Nenhuma pendência crítica no filtro atual.</TableCell>
                       </TableRow>
                     )}
                     {loading && (
                       <TableRow>
-                        <TableCell colSpan={3}>Carregando...</TableCell>
+                        <TableCell colSpan={4}>Carregando...</TableCell>
                       </TableRow>
                     )}
                   </TableBody>
