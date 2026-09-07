@@ -36,6 +36,7 @@ import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import Footer from "examples/Footer";
 
 import api from "services/api";
+import { compressReceiptImage } from "utils/compress-receipt-image";
 import { useUser } from "context/user.context";
 
 const EMPTY_RECEIPT_FORM = {
@@ -507,7 +508,8 @@ function Receipts() {
         formData.append("recipient", recipient);
         formData.append("note", note);
         formData.append("received", profileUuid);
-        formData.append("file", receiptForm.image);
+        const compressedImage = await compressReceiptImage(receiptForm.image);
+        formData.append("file", compressedImage);
 
         await api.post("/received-package/create-received-package", formData, {
           headers: {
