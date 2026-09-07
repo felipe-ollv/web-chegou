@@ -57,6 +57,19 @@ const getNoticePdfUrl = (content) => {
   return `${base}/note-data/pdfs/${encodeURIComponent(filename)}`;
 };
 
+const formatNoticeDate = (value) => {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  const day = date.toLocaleDateString("pt-BR", {
+    day: "2-digit", month: "2-digit", year: "numeric",
+  });
+  const time = date.toLocaleTimeString("pt-BR", {
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  });
+  return `${day} ${time}`;
+};
+
 const normalizeAvisos = (list = []) =>
   list.map((item) => {
     const url = getNoticePdfUrl(item.content) || "#";
@@ -65,8 +78,9 @@ const normalizeAvisos = (list = []) =>
     return {
       id: item.uuid_note_data || fileName,
       titulo: fileName.replace(/[-_]/g, " "),
-      data: item.created_at ? String(item.created_at).slice(0, 10) : "-",
-      tipo: "Comunicado",
+      descricao: item.description || "",
+      data: formatNoticeDate(item.created_at),
+      tipo: item.category || "Comunicado",
       status: Number(item.deleted || 0) === 1 ? "Desativado" : "Ativo",
       url,
       raw: item,
@@ -127,6 +141,7 @@ function Avisos() {
     const formData = new FormData();
     formData.append("file", formAviso.arquivo);
     formData.append("uuidCondominium", uuidCondominium);
+    formData.append("category", formAviso.tipo);
 
     try {
       await api.post("/note-data/document", formData, {
@@ -205,6 +220,7 @@ function Avisos() {
                   <TableHead>
                     <TableRow>
                       <TableCell>Título</TableCell>
+                      <TableCell>Descrição / Anotação</TableCell>
                       <TableCell>Data</TableCell>
                       <TableCell>Tipo</TableCell>
                       <TableCell>Status</TableCell>
@@ -220,7 +236,10 @@ function Avisos() {
                               {aviso.titulo}
                             </MDTypography>
                           </TableCell>
-                          <TableCell>{aviso.data}</TableCell>
+                          <TableCell sx={{ minWidth: 200, maxWidth: 360, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+                            {aviso.descricao || "-"}
+                          </TableCell>
+                          <TableCell sx={{ whiteSpace: "nowrap" }}>{aviso.data}</TableCell>
                           <TableCell>
                             <Chip
                               label={aviso.tipo}
@@ -279,7 +298,7 @@ function Avisos() {
                       ))}
                     {loading && (
                       <TableRow>
-                        <TableCell colSpan={5}>
+                        <TableCell colSpan={6}>
                           <MDBox py={2}>
                             <MDTypography variant="button" color="text">
                               Carregando...
