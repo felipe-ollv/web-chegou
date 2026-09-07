@@ -107,6 +107,8 @@ const formatReceivedAtLabel = (value) => {
   return `${datePart} ${timePart}`;
 };
 
+const normalizeReceiptText = (value) => String(value ?? "").trim();
+
 const compareOptionLabels = (a, b) =>
   String(a).localeCompare(String(b), "pt-BR", { numeric: true, sensitivity: "base" });
 
@@ -231,8 +233,8 @@ function Receipts() {
           .map((resident, index) => ({
             id: resident.uuid_user_profile || `${resident.name}-${index}`,
             name: resident.name || "",
-            block: resident.apartment_block || "",
-            apartment: resident.apartment || "",
+            block: normalizeReceiptText(resident.apartment_block),
+            apartment: normalizeReceiptText(resident.apartment),
           }))
           .filter((resident) => resident.name && resident.block && resident.apartment);
 
@@ -450,7 +452,7 @@ function Receipts() {
   };
 
   const handleReceiptBlockChange = (event) => {
-    const nextBlock = event.target.value;
+    const nextBlock = normalizeReceiptText(event.target.value);
     setReceiptForm((prev) => ({
       ...prev,
       block: nextBlock,
@@ -461,7 +463,7 @@ function Receipts() {
   };
 
   const handleReceiptApartmentChange = (event) => {
-    const nextApartment = event.target.value;
+    const nextApartment = normalizeReceiptText(event.target.value);
     setReceiptForm((prev) => ({
       ...prev,
       apartment: nextApartment,
@@ -480,10 +482,10 @@ function Receipts() {
   };
 
   const handleSaveReceipt = async () => {
-    const block = receiptForm.block.trim();
-    const apartment = receiptForm.apartment.trim();
-    const recipient = receiptForm.recipient.trim();
-    const note = receiptForm.note.trim();
+    const block = normalizeReceiptText(receiptForm.block);
+    const apartment = normalizeReceiptText(receiptForm.apartment);
+    const recipient = normalizeReceiptText(receiptForm.recipient);
+    const note = normalizeReceiptText(receiptForm.note);
 
     if (!profileUuid) {
       setFormError("Não foi possível identificar o usuário logado.");
