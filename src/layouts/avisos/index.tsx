@@ -46,9 +46,20 @@ const statusColor = {
 
 const tipoOptions = Object.keys(tipoColor);
 
+const getNoticePdfUrl = (content) => {
+  if (!content || typeof content !== "string") return null;
+  if (/^https?:\/\//i.test(content)) return content;
+  const webBase = api.defaults.baseURL.replace(/\/$/, "");
+  if (content.startsWith("/")) return new URL(content, webBase).href;
+  const filename = content.split("/").pop();
+  const base = /^document-\d+\.pdf$/i.test(filename)
+    ? webBase : webBase.replace(/\/painel(?=\/|$)/g, "");
+  return `${base}/note-data/pdfs/${encodeURIComponent(filename)}`;
+};
+
 const normalizeAvisos = (list = []) =>
   list.map((item) => {
-    const url = item.content || "#";
+    const url = getNoticePdfUrl(item.content) || "#";
     const fileName = String(url).split("/").pop() || "Documento";
 
     return {
