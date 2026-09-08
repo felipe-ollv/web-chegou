@@ -14,22 +14,26 @@ export async function compressReceiptImage(file: File): Promise<File> {
     if (!context) throw new Error("Não foi possível preparar a imagem.");
     context.imageSmoothingEnabled = true;
     context.imageSmoothingQuality = "high";
+    // JPEG has no transparency; composite transparent areas onto white.
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
     context.drawImage(image, 0, 0, canvas.width, canvas.height);
 
     const blob = await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob(
         (result) => result ? resolve(result) : reject(new Error("Falha ao comprimir imagem.")),
-        "image/webp",
+        "image/jpeg",
         0.9,
       );
     });
-    // Some browsers fall back to PNG. Use the actual encoder output's extension.
-    if (blob.size >= file.size && ["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type)) {
-      return file;
+    if (blob.type !== "image/jpeg") {
+      throw new Error("Não foi possível converter a imagem para JPG.");
     }
-    const extension = blob.type === "image/webp" ? "webp" : "png";
-    return new File([blob], `${file.name.replace(/\.[^.]+$/, "")}.${extension}`, {
-      type: blob.type,
+    // Keep an already smaller JPEG only when it also meets the size limit.
+    const output = file.type === "image/jpeg" && scale === 1 && file.size <= blob.size
+      ? file : blob;
+    return new File([output], `${file.name.replace(/\.[^.]+$/, "")}.jpg`, {
+      type: "image/jpeg",
       lastModified: file.lastModified,
     });
   } finally {
