@@ -100,7 +100,7 @@ const parseReceivedAtDate = (value) => {
 const formatReceivedAtLabel = (value) => {
   const date = parseReceivedAtDate(value);
   if (!date) return value || "-";
-  const datePart = date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  const datePart = date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
   const timePart = date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   return `${datePart} ${timePart}`;
 };
@@ -498,7 +498,6 @@ function Receipts() {
     try {
       setIsSavingReceipt(true);
       const condominiumUuid = selectedCondominium?.uuid_condominium;
-      if (receiptForm.image) {
         const formData = new FormData();
         formData.append("block", block);
         formData.append("apartment", apartment);
@@ -513,15 +512,7 @@ function Receipts() {
             "Content-Type": "multipart/form-data",
           },
         });
-      } else {
-        await api.post("/received-package/create-received-package", {
-          block,
-          apartment,
-          recipient,
-          note,
-          received: profileUuid,
-        });
-      }
+
       handleCloseModal();
       await loadReceipts(condominiumUuid);
     } catch (error) {

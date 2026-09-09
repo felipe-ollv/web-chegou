@@ -23,7 +23,7 @@ export async function compressReceiptImage(file: File): Promise<File> {
       canvas.toBlob(
         (result) => result ? resolve(result) : reject(new Error("Falha ao comprimir imagem.")),
         "image/jpeg",
-        0.9,
+        0.7,
       );
     });
     if (blob.type !== "image/jpeg") {
